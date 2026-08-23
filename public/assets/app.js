@@ -1,7 +1,9 @@
-import { estimateAll, isPricingStale } from "./pricing.js";
+import { estimateAll, isPricingStale, PRICING } from "./pricing.js";
 
 const form = document.querySelector("#costForm");
 const plan = document.querySelector("#plan");
+let snapshotMode = "manual";
+let activeBudget = Number(localStorage.getItem("cloud-cost-budget-usd")) || 0;
 
 const presets = {
   photo: { monthlyUploadGb: 100, retentionDays: 3, averageFileGb: 2, downloadsPerFile: 3, workerRequests: 100_000, averageCpuMs: 5, rowsRead: 1_000_000, rowsWritten: 100_000, d1StorageGb: 0.5 },
@@ -11,12 +13,23 @@ const presets = {
 
 const demoSnapshot = {
   source: "demo",
-  period: { label: "デモ / 直近30日" },
-  r2: { storageGbMonth: 468.4, classA: 82400, classB: 326800 },
-  workers: { requests: 1860000, cpuTimeP50Ms: 5.8, cpuTimeP99Ms: 19.4 },
-  d1: { rowsRead: 28400000, rowsWritten: 1260000, storageGb: 1.8 },
+  period: { start: "2026-08-01T00:00:00.000Z", end: "2026-08-24T00:00:00.000Z", label: "デモ / 今月24日分", daysObserved: 24, daysInMonth: 31 },
+  r2: { storageGbMonth: 362.6, classA: 63800, classB: 253000, buckets: [] },
+  workers: { requests: 1440000, cpuTimeP50Ms: 5.8, cpuTimeP99Ms: 19.4, scripts: [] },
+  d1: { rowsRead: 21987000, rowsWritten: 975000, storageGb: 1.8, databases: [] },
   limitations: ["これは画面確認用の架空データです。", "Workers CPU料金はP50を中心値、P99を上限参考値として推定します。"]
 };
+
+const demoHistory = [
+  { ...demoSnapshot, capturedOn: "2026-08-24" },
+  {
+    capturedOn: "2026-07-31",
+    period: { start: "2026-07-01T00:00:00.000Z", end: "2026-07-31T23:59:59.000Z", daysObserved: 31, daysInMonth: 31 },
+    r2: { storageGbMonth: 410, classA: 71_000, classB: 290_000 },
+    workers: { requests: 1_600_000, cpuTimeP50Ms: 5.5, cpuTimeP99Ms: 18 },
+    d1: { rowsRead: 24_000_000, rowsWritten: 1_100_000, storageGb: 1.6 },
+  },
+];
 
 const money = (value) => `$${(Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2)}`;
 const compact = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1, notation: "compact" });
@@ -46,6 +59,27 @@ function setBar(id, amount, total) {
   el.style.width = total > 0 ? `${Math.max(amount > 0 ? 2 : 0, amount / total * 100)}%` : "0%";
 }
 
+function updateBudgetStatus(total) {
+  const status = document.querySelector("#budgetStatus");
+  if (!(activeBudget > 0)) {
+    status.hidden = true;
+    return;
+  }
+  const ratio = total / activeBudget;
+  status.hidden = false;
+  status.classList.toggle("is-watch", ratio >= 0.5 && ratio < 0.8);
+  status.classList.toggle("is-danger", ratio >= 0.8);
+  document.querySelector("#budgetRatio").textContent = `${Math.round(ratio * 100)}%`;
+  document.querySelector("#budgetBar").style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;
+  document.querySelector("#budgetMessage").textContent = ratio >= 1
+    ? `予算を${money(total - activeBudget)}超える見込みです。`
+    : ratio >= 0.8
+      ? `予算まで残り${money(activeBudget - total)}です。`
+      : ratio >= 0.5
+        ? "予算の50%を超えました。推移を確認してください。"
+        : `予算まで${money(activeBudget - total)}の余裕があります。`;
+}
+
 function render() {
   const result = estimateAll(readInput());
   document.querySelector("#totalUsd").textContent = money(result.subtotal);
@@ -63,6 +97,7 @@ function render() {
   setBar("barWorkers", result.workers.total, result.subtotal);
   setBar("barR2", result.r2.total, result.subtotal);
   setBar("barD1", result.d1.total, result.subtotal);
+  updateBudgetStatus(result.subtotal);
 
   const warningBox = document.querySelector("#warnings");
   warningBox.replaceChildren();
@@ -99,20 +134,116 @@ function renderResourceList(id, rows, describe) {
   });
 }
 
+function projectionFactor(snapshot) {
+  const observed = Number(snapshot.period.daysObserved) || 30;
+  const total = Number(snapshot.period.daysInMonth) || observed;
+  return Math.max(1, total / observed);
+}
+
+function projectedSnapshot(snapshot) {
+  const factor = projectionFactor(snapshot);
+  return {
+    ...snapshot,
+    r2: {
+      ...snapshot.r2,
+      storageGbMonth: snapshot.r2.storageGbMonth * factor,
+      classA: snapshot.r2.classA * factor,
+      classB: snapshot.r2.classB * factor,
+    },
+    workers: { ...snapshot.workers, requests: snapshot.workers.requests * factor },
+    d1: {
+      ...snapshot.d1,
+      rowsRead: snapshot.d1.rowsRead * factor,
+      rowsWritten: snapshot.d1.rowsWritten * factor,
+    },
+  };
+}
+
+function estimateSnapshot(snapshot, cpuField = "cpuTimeP50Ms") {
+  const projected = projectedSnapshot(snapshot);
+  return estimateAll({
+    exchangeRate: value("exchangeRate") || 150,
+    r2: {
+      storageClass: "standard",
+      monthlyUploadGb: 0,
+      retentionDays: 1,
+      averageFileGb: 1,
+      downloadsPerFile: 0,
+      multipartPartMb: 100,
+      existingStorageGbMonth: projected.r2.storageGbMonth,
+      existingClassA: projected.r2.classA,
+      existingClassB: projected.r2.classB,
+    },
+    workers: { plan: "paid", requests: projected.workers.requests, averageCpuMs: projected.workers[cpuField] },
+    d1: { plan: "paid", rowsRead: projected.d1.rowsRead, rowsWritten: projected.d1.rowsWritten, storageGb: projected.d1.storageGb },
+  });
+}
+
+function renderHistory(points) {
+  const delta = document.querySelector("#historyDelta");
+  const note = document.querySelector("#historyNote");
+  if (!Array.isArray(points) || points.length === 0) {
+    delta.textContent = "履歴を蓄積中";
+    note.textContent = "翌月以降に比較できます";
+    return;
+  }
+  const current = points[0];
+  const previous = points.find((point) => point.period.start.slice(0, 7) !== current.period.start.slice(0, 7));
+  if (!previous) {
+    delta.textContent = "履歴を蓄積中";
+    note.textContent = `${points.length}日分を保存済み`;
+    return;
+  }
+  const currentTotal = estimateSnapshot(current).subtotal;
+  const previousTotal = estimateSnapshot(previous).subtotal;
+  const difference = currentTotal - previousTotal;
+  const percent = previousTotal > 0 ? difference / previousTotal * 100 : 0;
+  delta.textContent = `${difference >= 0 ? "+" : "−"}${money(Math.abs(difference))} (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`;
+  note.textContent = `${previous.period.start.slice(0, 7).replace("-", "年")}月比`;
+}
+
+function resourceCostRows(snapshot) {
+  const factor = projectionFactor(snapshot);
+  const r2Rate = PRICING.r2.standard;
+  const workersRate = PRICING.workers.paid;
+  const d1Rate = PRICING.d1.paid;
+  return {
+    buckets: (snapshot.r2.buckets ?? []).map((row) => ({
+      ...row,
+      cost: row.storageGbMonth * factor * r2Rate.storagePerGbMonth
+        + row.classA * factor / 1_000_000 * r2Rate.classAPerMillion
+        + row.classB * factor / 1_000_000 * r2Rate.classBPerMillion,
+    })).sort((left, right) => right.cost - left.cost),
+    scripts: (snapshot.workers.scripts ?? []).map((row) => ({
+      ...row,
+      cost: row.requests * factor / 1_000_000 * workersRate.requestsPerMillion
+        + row.requests * factor * row.cpuTimeP50Ms / 1_000_000 * workersRate.cpuPerMillionMs,
+    })).sort((left, right) => right.cost - left.cost),
+    databases: (snapshot.d1.databases ?? []).map((row) => ({
+      ...row,
+      cost: row.rowsRead * factor / 1_000_000 * d1Rate.rowsReadPerMillion
+        + row.rowsWritten * factor / 1_000_000 * d1Rate.rowsWrittenPerMillion
+        + row.storageGb * d1Rate.storagePerGbMonth,
+    })).sort((left, right) => right.cost - left.cost),
+  };
+}
+
 function showConnectedSnapshot(snapshot, accountName = "デモアカウント") {
+  snapshotMode = snapshot.source;
+  const projected = projectedSnapshot(snapshot);
   plan.value = "paid";
   setValue("monthlyUploadGb", 0);
   setValue("retentionDays", 1);
   setValue("averageFileGb", 1);
   setValue("downloadsPerFile", 0);
-  setValue("existingStorageGbMonth", snapshot.r2.storageGbMonth);
-  setValue("existingClassA", snapshot.r2.classA);
-  setValue("existingClassB", snapshot.r2.classB);
-  setValue("workerRequests", snapshot.workers.requests);
-  setValue("averageCpuMs", snapshot.workers.cpuTimeP50Ms);
-  setValue("rowsRead", snapshot.d1.rowsRead);
-  setValue("rowsWritten", snapshot.d1.rowsWritten);
-  setValue("d1StorageGb", snapshot.d1.storageGb);
+  setValue("existingStorageGbMonth", projected.r2.storageGbMonth);
+  setValue("existingClassA", projected.r2.classA);
+  setValue("existingClassB", projected.r2.classB);
+  setValue("workerRequests", projected.workers.requests);
+  setValue("averageCpuMs", projected.workers.cpuTimeP50Ms);
+  setValue("rowsRead", projected.d1.rowsRead);
+  setValue("rowsWritten", projected.d1.rowsWritten);
+  setValue("d1StorageGb", projected.d1.storageGb);
   document.querySelectorAll("[data-preset]").forEach((item) => item.classList.remove("is-active"));
 
   document.querySelector("#connectionTitle").textContent = snapshot.source === "demo" ? "デモデータを読み込みました" : accountName;
@@ -120,9 +251,10 @@ function showConnectedSnapshot(snapshot, accountName = "デモアカウント") 
   document.querySelector("#liveR2").textContent = `${snapshot.r2.storageGbMonth.toLocaleString("ja-JP", { maximumFractionDigits: 1 })} GB-mo`;
   document.querySelector("#liveWorkers").textContent = `${compact.format(snapshot.workers.requests)} req`;
   document.querySelector("#liveD1").textContent = `${compact.format(snapshot.d1.rowsRead)} 行`;
-  renderResourceList("bucketUsage", snapshot.r2.buckets ?? [], (row) => `${row.storageGbMonth.toLocaleString("ja-JP", { maximumFractionDigits: 1 })} GB-mo`);
-  renderResourceList("scriptUsage", snapshot.workers.scripts ?? [], (row) => `${compact.format(row.requests)} req / CPU P50 ${row.cpuTimeP50Ms.toLocaleString("ja-JP", { maximumFractionDigits: 1 })} ms`);
-  renderResourceList("databaseUsage", snapshot.d1.databases ?? [], (row) => `${compact.format(row.rowsRead)} reads / ${row.storageGb.toLocaleString("ja-JP", { maximumFractionDigits: 1 })} GB`);
+  const resources = resourceCostRows(snapshot);
+  renderResourceList("bucketUsage", resources.buckets, (row) => `${money(row.cost)} / ${row.storageGbMonth.toLocaleString("ja-JP", { maximumFractionDigits: 1 })} GB-mo`);
+  renderResourceList("scriptUsage", resources.scripts, (row) => `${money(row.cost)} / ${compact.format(row.requests)} req`);
+  renderResourceList("databaseUsage", resources.databases, (row) => `${money(row.cost)} / ${compact.format(row.rowsRead)} reads`);
   const limitations = document.querySelector("#connectionLimitations");
   limitations.replaceChildren();
   (snapshot.limitations ?? []).forEach((message) => {
@@ -133,6 +265,13 @@ function showConnectedSnapshot(snapshot, accountName = "デモアカウント") 
   document.querySelector("#connectionPanel").hidden = false;
   document.querySelector("#disconnectButton").hidden = snapshot.source === "demo";
   render();
+  const center = estimateAll(readInput());
+  const highInput = readInput();
+  highInput.workers.averageCpuMs = projected.workers.cpuTimeP99Ms;
+  const high = estimateAll(highInput);
+  document.querySelector("#liveForecast").textContent = high.subtotal - center.subtotal >= 0.01
+    ? `${money(center.subtotal)}–${money(high.subtotal)}`
+    : money(center.subtotal);
 }
 
 async function fetchJson(url, options) {
@@ -151,6 +290,30 @@ async function loadUsage() {
   const snapshot = await fetchJson("/api/usage");
   const accountName = document.querySelector("#accountSelect").selectedOptions[0]?.textContent || "Cloudflareアカウント";
   showConnectedSnapshot(snapshot, accountName);
+  await loadBudget();
+  await loadHistory();
+}
+
+async function loadBudget() {
+  if (snapshotMode !== "cloudflare") {
+    document.querySelector("#budgetUsd").value = activeBudget || "";
+    render();
+    return;
+  }
+  try {
+    const result = await fetchJson("/api/budget");
+    activeBudget = result.budget?.monthlyBudgetUsd ?? 0;
+    document.querySelector("#budgetUsd").value = activeBudget || "";
+    render();
+  } catch { /* A failed budget request must not hide usage data. */ }
+}
+
+async function loadHistory() {
+  if (snapshotMode !== "cloudflare") return;
+  try {
+    const result = await fetchJson("/api/history?limit=400");
+    renderHistory((result.points ?? []).map((point) => ({ ...point, period: { start: point.periodStart, end: point.periodEnd, daysObserved: point.daysObserved, daysInMonth: point.daysInMonth } })));
+  } catch { /* History is optional during the first connection. */ }
 }
 
 async function loadSession() {
@@ -218,6 +381,8 @@ document.querySelector("#demoButton").addEventListener("click", async () => {
   let snapshot = demoSnapshot;
   try { snapshot = await fetchJson("/api/demo/usage"); } catch { /* Static preview fallback. */ }
   showConnectedSnapshot(snapshot);
+  await loadBudget();
+  renderHistory(demoHistory);
   dialog.close();
   document.querySelector("#connectionPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 });
@@ -230,9 +395,30 @@ document.querySelector("#accountSelect").addEventListener("change", async (event
     await loadUsage();
   } catch { /* Keep account selector available for retry. */ }
 });
+document.querySelector("#saveBudget").addEventListener("click", async () => {
+  const amount = value("budgetUsd");
+  const status = document.querySelector("#budgetSaveStatus");
+  status.textContent = "保存中…";
+  try {
+    if (snapshotMode === "cloudflare") {
+      const result = await fetchJson("/api/budget", { method: "POST", body: JSON.stringify({ monthlyBudgetUsd: amount }) });
+      activeBudget = result.budget.monthlyBudgetUsd;
+    } else {
+      activeBudget = amount;
+      if (amount > 0) localStorage.setItem("cloud-cost-budget-usd", String(amount));
+      else localStorage.removeItem("cloud-cost-budget-usd");
+    }
+    status.textContent = amount > 0 ? "保存しました" : "予算を解除しました";
+    render();
+  } catch {
+    status.textContent = "保存できませんでした";
+  }
+});
 document.querySelector("#disconnectButton").addEventListener("click", async () => {
   try { await fetchJson("/api/disconnect", { method: "POST" }); } catch { /* Hide local state even if revoke is unavailable. */ }
   document.querySelector("#connectionPanel").hidden = true;
+  snapshotMode = "manual";
+  activeBudget = 0;
   form.reset();
   render();
 });

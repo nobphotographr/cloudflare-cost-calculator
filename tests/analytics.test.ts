@@ -73,7 +73,7 @@ describe("Cloudflare Analytics集計", () => {
       now: new Date("2026-08-24T00:00:00Z"),
     });
     expect(result.source).toBe("cloudflare");
-    expect(result.period.label).toBe("直近30日");
+    expect(result.period.label).toBe("今月 24日分");
     expect(result.workers.requests).toBe(0);
     expect(result.limitations).toContain("Workersの集計を取得できませんでした。権限または利用状況を確認してください。");
     expect(result.limitations).not.toContain("R2の集計を取得できませんでした。権限または利用状況を確認してください。");

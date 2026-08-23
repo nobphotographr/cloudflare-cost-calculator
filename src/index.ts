@@ -1,6 +1,7 @@
 import { demoUsage, loadAccountUsage } from "./analytics";
 import { listAuthorizedAccounts } from "./cloudflare";
 import { createOAuthRequest, exchangeCode, refreshToken, revokeToken } from "./oauth";
+import { cleanupUsageHistory, deleteAccountData, getBudget, loadUsageHistory, saveUsageSnapshot, setBudget } from "./history";
 import {
   cleanupSessions,
   connectSession,
@@ -201,9 +202,34 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
     if (!session) return json({ error: "not_connected" }, 401);
     if (!session.selectedAccount) return json({ error: "account_required", accounts: session.accounts }, 409);
     try {
-      return json(await loadAccountUsage({ accessToken: session.tokenSet.accessToken, accountId: session.selectedAccount.id }));
+      const snapshot = await loadAccountUsage({ accessToken: session.tokenSet.accessToken, accountId: session.selectedAccount.id });
+      await saveUsageSnapshot(env.SESSIONS, session.selectedAccount.id, snapshot);
+      return json(snapshot);
     } catch {
       return json({ error: "analytics_failed" }, 502);
+    }
+  }
+
+  if (url.pathname === "/api/history" && request.method === "GET") {
+    const session = await connected(request, env);
+    if (!session?.selectedAccount) return json({ error: "not_connected" }, 401);
+    return json({ points: await loadUsageHistory(env.SESSIONS, session.selectedAccount.id, Number(url.searchParams.get("limit") ?? 90)) });
+  }
+
+  if (url.pathname === "/api/budget" && request.method === "GET") {
+    const session = await connected(request, env);
+    if (!session?.selectedAccount) return json({ error: "not_connected" }, 401);
+    return json({ budget: await getBudget(env.SESSIONS, session.selectedAccount.id) });
+  }
+
+  if (url.pathname === "/api/budget" && request.method === "POST") {
+    const session = await connected(request, env);
+    if (!session?.selectedAccount) return json({ error: "not_connected" }, 401);
+    const body = await request.json() as Record<string, unknown>;
+    try {
+      return json({ budget: await setBudget(env.SESSIONS, session.selectedAccount.id, Number(body.monthlyBudgetUsd)) });
+    } catch {
+      return json({ error: "invalid_budget" }, 400);
     }
   }
 
@@ -217,6 +243,7 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
       } catch {
         // Local session removal must still complete when Cloudflare is unavailable.
       }
+      await deleteAccountData(env.SESSIONS, session.accounts.map((account) => account.id));
       await deleteSession(env.SESSIONS, session.sessionHash);
     }
     return json({ disconnected: true }, 200, { "set-cookie": clearCookie(url) });
@@ -232,6 +259,6 @@ export default {
     return secured(await env.ASSETS.fetch(request), url);
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(cleanupSessions(env.SESSIONS).then(() => undefined));
+    ctx.waitUntil(Promise.all([cleanupSessions(env.SESSIONS), cleanupUsageHistory(env.SESSIONS)]).then(() => undefined));
   },
 };

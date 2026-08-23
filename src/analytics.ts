@@ -13,7 +13,7 @@ const CLASS_B = new Set([
 
 export type UsageSnapshot = {
   source: "cloudflare" | "demo";
-  period: { start: string; end: string; label: string };
+  period: { start: string; end: string; label: string; daysObserved: number; daysInMonth: number };
   r2: {
     storageGbMonth: number;
     classA: number;
@@ -220,7 +220,9 @@ export async function loadAccountUsage(input: {
   fetcher?: typeof fetch;
 }): Promise<UsageSnapshot> {
   const now = input.now ?? new Date();
-  const start = new Date(now.getTime() - 29 * 86_400_000);
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const daysObserved = now.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
   const variables = {
     accountTag: input.accountId,
     start: start.toISOString(),
@@ -243,7 +245,7 @@ export async function loadAccountUsage(input: {
   if (d1Result.status === "rejected") limitations.push("D1の集計を取得できませんでした。権限または利用状況を確認してください。");
   return {
     source: "cloudflare",
-    period: { start: start.toISOString(), end: now.toISOString(), label: "直近30日" },
+    period: { start: start.toISOString(), end: now.toISOString(), label: `今月 ${daysObserved}日分`, daysObserved, daysInMonth },
     r2: r2Result.status === "fulfilled" ? aggregateR2(r2Result.value) : { storageGbMonth: 0, classA: 0, classB: 0, buckets: [] },
     workers: workersResult.status === "fulfilled" ? aggregateWorkers(workersResult.value) : { requests: 0, cpuTimeP50Ms: 0, cpuTimeP99Ms: 0, scripts: [] },
     d1: d1Result.status === "fulfilled" ? aggregateD1(d1Result.value) : { rowsRead: 0, rowsWritten: 0, storageGb: 0, databases: [] },
@@ -254,30 +256,30 @@ export async function loadAccountUsage(input: {
 export function demoUsage(): UsageSnapshot {
   return {
     source: "demo",
-    period: { start: "2026-07-26T00:00:00.000Z", end: "2026-08-24T00:00:00.000Z", label: "デモ / 直近30日" },
+    period: { start: "2026-08-01T00:00:00.000Z", end: "2026-08-24T00:00:00.000Z", label: "デモ / 今月24日分", daysObserved: 24, daysInMonth: 31 },
     r2: {
-      storageGbMonth: 468.4,
-      classA: 82_400,
-      classB: 326_800,
+      storageGbMonth: 362.6,
+      classA: 63_800,
+      classB: 253_000,
       buckets: [
-        { name: "client-deliveries", storageGbMonth: 421.8, classA: 68_200, classB: 280_100 },
-        { name: "project-archive", storageGbMonth: 46.6, classA: 14_200, classB: 46_700 },
+        { name: "client-deliveries", storageGbMonth: 326.5, classA: 52_800, classB: 216_900 },
+        { name: "project-archive", storageGbMonth: 36.1, classA: 11_000, classB: 36_100 },
       ],
     },
     workers: {
-      requests: 1_860_000,
+      requests: 1_440_000,
       cpuTimeP50Ms: 5.8,
       cpuTimeP99Ms: 19.4,
       scripts: [
-        { name: "handoff", requests: 1_620_000, cpuTimeP50Ms: 5.4, cpuTimeP99Ms: 18.1 },
-        { name: "cost-notifier", requests: 240_000, cpuTimeP50Ms: 8.5, cpuTimeP99Ms: 28.2 },
+        { name: "handoff", requests: 1_254_194, cpuTimeP50Ms: 5.4, cpuTimeP99Ms: 18.1 },
+        { name: "cost-notifier", requests: 185_806, cpuTimeP50Ms: 8.5, cpuTimeP99Ms: 28.2 },
       ],
     },
     d1: {
-      rowsRead: 28_400_000,
-      rowsWritten: 1_260_000,
+      rowsRead: 21_987_097,
+      rowsWritten: 975_484,
       storageGb: 1.8,
-      databases: [{ id: "handoff-db", rowsRead: 28_400_000, rowsWritten: 1_260_000, storageGb: 1.8 }],
+      databases: [{ id: "handoff-db", rowsRead: 21_987_097, rowsWritten: 975_484, storageGb: 1.8 }],
     },
     limitations: ["これは画面確認用の架空データです。", "Workers CPU料金はP50を中心値、P99を上限参考値として推定します。"],
   };

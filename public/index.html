@@ -41,13 +41,15 @@
         <div><dt>R2保存量</dt><dd id="liveR2">—</dd></div>
         <div><dt>Workers</dt><dd id="liveWorkers">—</dd></div>
         <div><dt>D1読み取り</dt><dd id="liveD1">—</dd></div>
+        <div><dt>月末予測</dt><dd id="liveForecast">—</dd></div>
       </dl>
       <div class="connection-actions">
         <button type="button" id="refreshUsage">再取得</button>
         <button type="button" id="disconnectButton">接続解除</button>
       </div>
       <details class="connection-breakdown">
-        <summary>リソース別の利用量を見る</summary>
+        <summary>リソース別の料金寄与を見る</summary>
+        <p class="resource-note">金額は月末まで同じ利用ペースが続く前提の、無料枠適用前の寄与額です。</p>
         <div class="resource-columns">
           <section>
             <h3>R2 buckets</h3>
@@ -63,6 +65,17 @@
           </section>
         </div>
       </details>
+      <div class="budget-control">
+        <label for="budgetUsd">月額予算</label>
+        <span class="budget-input"><span>$</span><input id="budgetUsd" type="number" min="0" max="1000000" step="1" placeholder="例 50"></span>
+        <button type="button" id="saveBudget">予算を保存</button>
+        <span class="budget-save-status" id="budgetSaveStatus" aria-live="polite"></span>
+      </div>
+      <div class="history-summary">
+        <span>前月比較</span>
+        <strong id="historyDelta">履歴を蓄積中</strong>
+        <small id="historyNote">翌月以降に比較できます</small>
+      </div>
       <div class="connection-limitations" id="connectionLimitations"></div>
     </section>
 
@@ -167,6 +180,11 @@
           <span>月額の推定</span>
           <strong id="totalUsd">$5.00</strong>
           <p id="totalYen">約 750円 / 月</p>
+        </div>
+        <div class="budget-status" id="budgetStatus" hidden>
+          <div><span>予算に対する見込み</span><strong id="budgetRatio">—</strong></div>
+          <span class="budget-track"><i id="budgetBar"></i></span>
+          <p id="budgetMessage"></p>
         </div>
         <div class="cost-bar" aria-hidden="true">
           <span id="barWorkers"></span><span id="barR2"></span><span id="barD1"></span>

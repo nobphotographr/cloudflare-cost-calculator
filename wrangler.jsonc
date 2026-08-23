@@ -13,7 +13,7 @@
     {
       "binding": "SESSIONS",
       "database_name": "cloud-cost-sessions",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "36f41296-3287-4ffa-b7a1-88b8ba1ea441",
       "migrations_dir": "migrations"
     }
   ],

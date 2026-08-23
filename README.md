@@ -12,6 +12,9 @@ Cloudflare R2、Workers、D1の公開価格から月額利用料を試算し、O
 - 用途別プリセット
 - Cloudflare OAuth Authorization Code Flow + PKCE
 - R2、Workers、D1のアカウント実績とリソース別内訳
+- 今月実績からの月末予測とWorkers CPU P50–P99レンジ
+- リソース別の料金寄与ランキングと月額予算アラート
+- 400日間の日次利用スナップショット（アカウント合計のみ）
 - refresh token、接続解除、期限切れセッションの自動削除
 
 手入力の試算はブラウザ内だけで行います。接続機能は集計済みAnalyticsのみを取得し、R2のファイル本体・オブジェクト名・D1の行データは取得しません。
@@ -31,6 +34,8 @@ npm run dev
 ## OAuth接続
 
 CloudflareのOAuth client、D1、Worker secretsが必要です。設定値と実機検証の手順は [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md) にまとめています。
+
+現在のβ版は `https://cloudflare-cost-calculator.nobu-8yashi.workers.dev/` へデプロイ済みです。OAuth client設定が完了するまでは手入力とデモ接続を利用できます。
 
 ## 料金ソース
 

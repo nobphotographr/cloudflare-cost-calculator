@@ -5,7 +5,16 @@
   "type": "module",
   "description": "Cloudflare R2 / Workers / D1 の利用料金を事前に試算するWebツール",
   "scripts": {
-    "test": "node --test",
-    "serve": "python3 -m http.server 4178"
+    "test": "node --test tests/pricing.test.mjs && vitest run tests/*.test.ts",
+    "check": "tsc --noEmit",
+    "dev": "wrangler dev --local --persist-to .wrangler/state --var ENVIRONMENT:local",
+    "serve": "python3 -m http.server 4178 -d public",
+    "db:migrate:local": "wrangler d1 migrations apply SESSIONS --local --persist-to .wrangler/state"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260820.1",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.125.0"
   }
 }

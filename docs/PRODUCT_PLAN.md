@@ -18,7 +18,7 @@ Cloudflareを採用する個人・小規模事業者が、請求後ではなく�
 ### Phase 2 — 読み取り専用Cloudflare接続
 
 - Cloudflare OAuth Authorization Code Flowを利用する
-- 必須scopeは `Account Analytics: Read` のみに絞る
+- `Account Analytics: Read` を必須候補とし、アカウント一覧取得に追加scopeが必要かprivate clientで実機確認する
 - アカウントと対象リソースを利用者が選択する
 - R2、Workers、D1の集計値をGraphQL Analytics APIから読む
 - ファイル本体、オブジェクト名、D1の行データを取得しない
@@ -27,7 +27,7 @@ Cloudflareを採用する個人・小規模事業者が、請求後ではなく�
 ### Phase 3 — 予測と費用ガード
 
 - 今月実績、月末予測、前月比較
-- 高コストなバケット・Worker・DBの特定
+- 高コストなバケット・Worker・DBの特定（接続画面の利用量内訳は実装済み。金額順への拡張が残る）
 - 保存期間変更などの削減シミュレーション
 - 50%、80%、100%の予算通知
 - Handoffへアップロード前試算と上限停止を組み込む

@@ -1,6 +1,6 @@
 # Cloud Cost
 
-Cloudflare R2、Workers、D1の公開価格から、月額利用料をブラウザ上で試算する静的Webアプリです。
+Cloudflare R2、Workers、D1の公開価格から月額利用料を試算し、OAuth接続後は直近30日のAnalytics実績を自動反映するWebアプリです。
 
 ## 現在の範囲
 
@@ -10,17 +10,27 @@ Cloudflare R2、Workers、D1の公開価格から、月額利用料をブラウ�
 - D1 Free / Paidの行読み取り、行書き込み、保存容量
 - USDと参考円換算
 - 用途別プリセット
+- Cloudflare OAuth Authorization Code Flow + PKCE
+- R2、Workers、D1のアカウント実績とリソース別内訳
+- refresh token、接続解除、期限切れセッションの自動削除
 
-試算はブラウザ内だけで行います。Cloudflare OAuthによる実績値の読み取りは次期実装です。
+手入力の試算はブラウザ内だけで行います。接続機能は集計済みAnalyticsのみを取得し、R2のファイル本体・オブジェクト名・D1の行データは取得しません。
 
 ## ローカル確認
 
 ```bash
+npm install
+npm run db:migrate:local
 npm test
-npm run serve
+npm run check
+npm run dev
 ```
 
-`http://127.0.0.1:4178/` を開きます。
+`http://127.0.0.1:8787/` を開きます。OAuth未設定でも「デモデータで確認」から接続後の画面を検証できます。静的画面だけの確認は `npm run serve` と `http://127.0.0.1:4178/` を使います。
+
+## OAuth接続
+
+CloudflareのOAuth client、D1、Worker secretsが必要です。設定値と実機検証の手順は [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md) にまとめています。
 
 ## 料金ソース
 
@@ -28,7 +38,7 @@ npm run serve
 - [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
 - [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)
 
-料金設定は `assets/pricing.js` に更新日付きで集約しています。
+料金設定は `public/assets/pricing.js` に更新日付きで集約しています。
 
 ## 免責・商標
 

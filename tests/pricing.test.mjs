@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { estimateAll, estimateD1, estimateR2, estimateWorkers, isPricingStale } from "../assets/pricing.js";
+import { estimateAll, estimateD1, estimateR2, estimateWorkers, isPricingStale } from "../public/assets/pricing.js";
 
 test("100GBを3日保存すると10 GB-monthになり、Standard無料枠内に収まる", () => {
   const result = estimateR2({ monthlyUploadGb: 100, retentionDays: 3, averageFileGb: 2, downloadsPerFile: 3, multipartPartMb: 100 });

@@ -17,7 +17,7 @@
     </a>
     <div class="topbar-meta">
       <span class="pricing-date">料金表 <time datetime="2026-08-24">2026.08.24</time></span>
-      <button class="connect-button" type="button" id="connectButton">Cloudflareに接続 <span>近日対応</span></button>
+      <button class="connect-button" type="button" id="connectButton">Cloudflareに接続</button>
     </div>
   </header>
 
@@ -26,6 +26,44 @@
       <p class="eyebrow">CLOUDFLARE COST ESTIMATOR</p>
       <h1>使う前に、<br>月額を見通す。</h1>
       <p class="intro-copy">R2の保存期間、Workersの処理量、D1の利用量から、Cloudflareの月額を試算します。ファイルや認証情報は送信しません。</p>
+    </section>
+
+    <section class="connection-panel" id="connectionPanel" hidden aria-labelledby="connectionTitle">
+      <div class="connection-main">
+        <div class="connection-status"><span></span><strong id="connectionTitle">Cloudflareデータを読み込みました</strong></div>
+        <p id="connectionPeriod">直近30日</p>
+      </div>
+      <label class="account-picker" id="accountPicker" hidden>
+        <span>対象アカウント</span>
+        <select id="accountSelect"></select>
+      </label>
+      <dl class="connection-metrics">
+        <div><dt>R2保存量</dt><dd id="liveR2">—</dd></div>
+        <div><dt>Workers</dt><dd id="liveWorkers">—</dd></div>
+        <div><dt>D1読み取り</dt><dd id="liveD1">—</dd></div>
+      </dl>
+      <div class="connection-actions">
+        <button type="button" id="refreshUsage">再取得</button>
+        <button type="button" id="disconnectButton">接続解除</button>
+      </div>
+      <details class="connection-breakdown">
+        <summary>リソース別の利用量を見る</summary>
+        <div class="resource-columns">
+          <section>
+            <h3>R2 buckets</h3>
+            <ol id="bucketUsage"></ol>
+          </section>
+          <section>
+            <h3>Workers</h3>
+            <ol id="scriptUsage"></ol>
+          </section>
+          <section>
+            <h3>D1 databases</h3>
+            <ol id="databaseUsage"></ol>
+          </section>
+        </div>
+      </details>
+      <div class="connection-limitations" id="connectionLimitations"></div>
     </section>
 
     <section class="workspace" id="calculator" aria-label="料金試算">
@@ -165,7 +203,7 @@
       </div>
       <div class="method-copy">
         <p>R2の保存量は「月間アップロード量 × 保存日数 ÷ 30日」で推定し、Cloudflareの課金単位への切り上げと無料枠を反映します。Infrequent Accessは最低30日分の保存とデータ取り出し料金を含めます。</p>
-        <p>料金は公式ドキュメントの公開価格を使用しています。接続機能では、集計済みの容量と操作回数だけを読み取り、ファイル本体やファイル名は取得しない設計を予定しています。</p>
+        <p>料金は公式ドキュメントの公開価格を使用しています。接続機能では、集計済みの容量と操作回数だけを読み取り、ファイル本体やファイル名は取得しない設計です。</p>
         <div class="source-links">
           <a href="https://developers.cloudflare.com/r2/pricing/" target="_blank" rel="noreferrer">R2 pricing ↗</a>
           <a href="https://developers.cloudflare.com/workers/platform/pricing/" target="_blank" rel="noreferrer">Workers pricing ↗</a>
@@ -177,15 +215,19 @@
 
   <dialog id="connectDialog">
     <button class="dialog-close" type="button" id="closeDialog" aria-label="閉じる">×</button>
-    <p class="eyebrow">NEXT RELEASE</p>
+    <p class="eyebrow">ACCOUNT ANALYTICS</p>
     <h2>Cloudflare連携</h2>
-    <p>OAuthでAccount Analyticsの読み取りだけを許可し、R2・Workers・D1の集計値から今月の実績と月末予測を表示する予定です。</p>
+    <p>OAuthでAnalyticsの読み取りだけを許可し、R2・Workers・D1の集計値から直近30日の料金を表示します。</p>
     <ul>
       <li>APIトークンの貼り付けは不要</li>
       <li>ファイル本体とファイル名は読み取らない</li>
       <li>接続はCloudflare側からいつでも解除可能</li>
     </ul>
-    <button class="dialog-action" type="button" id="dialogAction">了解しました</button>
+    <div class="dialog-actions">
+      <button class="dialog-action" type="button" id="oauthConnectButton">Cloudflareへ進む</button>
+      <button class="dialog-secondary" type="button" id="demoButton">デモデータで確認</button>
+    </div>
+    <p class="dialog-message" id="dialogMessage" hidden></p>
   </dialog>
 
   <footer>

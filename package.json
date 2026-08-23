@@ -1,0 +1,11 @@
+{
+  "name": "cloudflare-cost-calculator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare R2 / Workers / D1 の利用料金を事前に試算するWebツール",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python3 -m http.server 4178"
+  }
+}

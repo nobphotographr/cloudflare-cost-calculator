@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Cost — Cloudflare料金試算</title>
+  <meta name="description" content="Cloudflare R2、Workers、D1の月額料金を、保存容量や利用量から試算します。">
+  <meta name="theme-color" content="#172149">
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#calculator">試算条件へ移動</a>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Cloud Cost トップ">
+      <span class="brand-mark" aria-hidden="true">C</span>
+      <span>Cloud Cost</span>
+    </a>
+    <div class="topbar-meta">
+      <span class="pricing-date">料金表 <time datetime="2026-08-24">2026.08.24</time></span>
+      <button class="connect-button" type="button" id="connectButton">Cloudflareに接続 <span>近日対応</span></button>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow">CLOUDFLARE COST ESTIMATOR</p>
+      <h1>使う前に、<br>月額を見通す。</h1>
+      <p class="intro-copy">R2の保存期間、Workersの処理量、D1の利用量から、Cloudflareの月額を試算します。ファイルや認証情報は送信しません。</p>
+    </section>
+
+    <section class="workspace" id="calculator" aria-label="料金試算">
+      <form class="controls" id="costForm">
+        <div class="form-header">
+          <div>
+            <p class="step-label">INPUT</p>
+            <h2>利用条件</h2>
+          </div>
+          <button class="text-button" type="button" id="resetButton">初期値に戻す</button>
+        </div>
+
+        <fieldset class="field-section">
+          <legend><span>01</span> 基本設定</legend>
+          <div class="field-grid two">
+            <label class="field">
+              <span>Workersプラン</span>
+              <select name="plan" id="plan">
+                <option value="paid">Paid — 月額 $5</option>
+                <option value="free">Free — 日次上限あり</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>円換算レート</span>
+              <span class="input-with-unit"><input name="exchangeRate" id="exchangeRate" type="number" min="1" step="0.1" value="150"><span>円 / USD</span></span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="field-section">
+          <legend><span>02</span> R2 ファイル保存</legend>
+          <div class="preset-row" aria-label="利用例">
+            <button type="button" class="preset" data-preset="photo">写真納品</button>
+            <button type="button" class="preset" data-preset="video">映像納品</button>
+            <button type="button" class="preset" data-preset="archive">長期保管</button>
+          </div>
+          <div class="field-grid two">
+            <label class="field">
+              <span>1か月のアップロード量</span>
+              <span class="input-with-unit"><input name="monthlyUploadGb" id="monthlyUploadGb" type="number" min="0" step="1" value="100"><span>GB</span></span>
+            </label>
+            <label class="field">
+              <span>平均保存期間</span>
+              <span class="input-with-unit"><input name="retentionDays" id="retentionDays" type="number" min="1" max="365" step="1" value="3"><span>日</span></span>
+            </label>
+            <label class="field">
+              <span>平均ファイルサイズ</span>
+              <span class="input-with-unit"><input name="averageFileGb" id="averageFileGb" type="number" min="0.001" step="0.1" value="2"><span>GB</span></span>
+            </label>
+            <label class="field">
+              <span>1ファイルの平均DL回数</span>
+              <span class="input-with-unit"><input name="downloadsPerFile" id="downloadsPerFile" type="number" min="0" step="1" value="3"><span>回</span></span>
+            </label>
+            <label class="field">
+              <span>ストレージクラス</span>
+              <select name="storageClass" id="storageClass">
+                <option value="standard">Standard</option>
+                <option value="infrequent">Infrequent Access</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>マルチパート分割サイズ</span>
+              <span class="input-with-unit"><input name="multipartPartMb" id="multipartPartMb" type="number" min="5" step="1" value="100"><span>MB</span></span>
+            </label>
+          </div>
+          <details class="advanced">
+            <summary>すでに使っているR2利用量を加える</summary>
+            <p>同じCloudflareアカウントで他のサービスを使っている場合に入力してください。無料枠はアカウント全体で共有されます。</p>
+            <div class="field-grid three">
+              <label class="field"><span>既存の保存量</span><span class="input-with-unit"><input name="existingStorageGbMonth" id="existingStorageGbMonth" type="number" min="0" step="1" value="0"><span>GB-mo</span></span></label>
+              <label class="field"><span>既存Class A</span><span class="input-with-unit"><input name="existingClassA" id="existingClassA" type="number" min="0" step="1000" value="0"><span>回</span></span></label>
+              <label class="field"><span>既存Class B</span><span class="input-with-unit"><input name="existingClassB" id="existingClassB" type="number" min="0" step="1000" value="0"><span>回</span></span></label>
+            </div>
+          </details>
+        </fieldset>
+
+        <fieldset class="field-section">
+          <legend><span>03</span> Workers</legend>
+          <div class="field-grid two">
+            <label class="field"><span>月間リクエスト</span><span class="input-with-unit"><input name="workerRequests" id="workerRequests" type="number" min="0" step="1000" value="100000"><span>回</span></span></label>
+            <label class="field"><span>平均CPU時間</span><span class="input-with-unit"><input name="averageCpuMs" id="averageCpuMs" type="number" min="0" step="0.1" value="5"><span>ms / 回</span></span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="field-section">
+          <legend><span>04</span> D1 データベース</legend>
+          <div class="field-grid three">
+            <label class="field"><span>月間読み取り行数</span><span class="input-with-unit"><input name="rowsRead" id="rowsRead" type="number" min="0" step="1000" value="1000000"><span>行</span></span></label>
+            <label class="field"><span>月間書き込み行数</span><span class="input-with-unit"><input name="rowsWritten" id="rowsWritten" type="number" min="0" step="1000" value="100000"><span>行</span></span></label>
+            <label class="field"><span>保存容量</span><span class="input-with-unit"><input name="d1StorageGb" id="d1StorageGb" type="number" min="0" step="0.1" value="0.5"><span>GB</span></span></label>
+          </div>
+        </fieldset>
+      </form>
+
+      <aside class="results" aria-live="polite">
+        <div class="result-heading">
+          <p class="step-label">ESTIMATE</p>
+          <span class="estimate-status"><span></span>計算済み</span>
+        </div>
+        <div class="total-block">
+          <span>月額の推定</span>
+          <strong id="totalUsd">$5.00</strong>
+          <p id="totalYen">約 750円 / 月</p>
+        </div>
+        <div class="cost-bar" aria-hidden="true">
+          <span id="barWorkers"></span><span id="barR2"></span><span id="barD1"></span>
+        </div>
+        <div class="legend">
+          <span><i class="workers"></i>Workers</span><span><i class="r2"></i>R2</span><span><i class="d1"></i>D1</span>
+        </div>
+        <dl class="breakdown">
+          <div><dt>Workers</dt><dd id="workersCost">$5.00</dd></div>
+          <div class="sub"><dt>基本料金</dt><dd id="workerBaseCost">$5.00</dd></div>
+          <div class="sub"><dt>超過利用</dt><dd id="workerUsageCost">$0.00</dd></div>
+          <div><dt>R2</dt><dd id="r2Cost">$0.00</dd></div>
+          <div class="sub"><dt>保存</dt><dd id="r2StorageCost">$0.00</dd></div>
+          <div class="sub"><dt>操作・取り出し</dt><dd id="r2OperationsCost">$0.00</dd></div>
+          <div><dt>D1</dt><dd id="d1Cost">$0.00</dd></div>
+        </dl>
+        <div class="usage-summary">
+          <h3>計算に使った量</h3>
+          <dl>
+            <div><dt>R2平均保存量</dt><dd id="r2Usage">10.0 GB-mo</dd></div>
+            <div><dt>推定ファイル数</dt><dd id="fileCount">50</dd></div>
+            <div><dt>Workers CPU</dt><dd id="workerCpu">0.5M ms</dd></div>
+          </dl>
+        </div>
+        <div class="warnings" id="warnings" hidden></div>
+        <p class="estimate-note">税、為替手数料、Cloudflareの他製品、契約固有の割引は含みません。実際の請求額を保証するものではありません。</p>
+      </aside>
+    </section>
+
+    <section class="method">
+      <div>
+        <p class="eyebrow">HOW IT WORKS</p>
+        <h2>試算の考え方</h2>
+      </div>
+      <div class="method-copy">
+        <p>R2の保存量は「月間アップロード量 × 保存日数 ÷ 30日」で推定し、Cloudflareの課金単位への切り上げと無料枠を反映します。Infrequent Accessは最低30日分の保存とデータ取り出し料金を含めます。</p>
+        <p>料金は公式ドキュメントの公開価格を使用しています。接続機能では、集計済みの容量と操作回数だけを読み取り、ファイル本体やファイル名は取得しない設計を予定しています。</p>
+        <div class="source-links">
+          <a href="https://developers.cloudflare.com/r2/pricing/" target="_blank" rel="noreferrer">R2 pricing ↗</a>
+          <a href="https://developers.cloudflare.com/workers/platform/pricing/" target="_blank" rel="noreferrer">Workers pricing ↗</a>
+          <a href="https://developers.cloudflare.com/d1/platform/pricing/" target="_blank" rel="noreferrer">D1 pricing ↗</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="connectDialog">
+    <button class="dialog-close" type="button" id="closeDialog" aria-label="閉じる">×</button>
+    <p class="eyebrow">NEXT RELEASE</p>
+    <h2>Cloudflare連携</h2>
+    <p>OAuthでAccount Analyticsの読み取りだけを許可し、R2・Workers・D1の集計値から今月の実績と月末予測を表示する予定です。</p>
+    <ul>
+      <li>APIトークンの貼り付けは不要</li>
+      <li>ファイル本体とファイル名は読み取らない</li>
+      <li>接続はCloudflare側からいつでも解除可能</li>
+    </ul>
+    <button class="dialog-action" type="button" id="dialogAction">了解しました</button>
+  </dialog>
+
+  <footer>
+    <span>CLOUD COST / UNOFFICIAL ESTIMATOR</span>
+    <span>Cloudflare, R2, Workers, D1はCloudflare, Inc.の商標または製品名です。本ツールは同社の公式サービスではありません。</span>
+  </footer>
+  <script type="module" src="./assets/app.js"></script>
+</body>
+</html>

@@ -19,6 +19,11 @@
 - private OAuth clientでの実アカウント接続
 - `account-analytics.read account-settings.read`によるR2・Workers・D1 Analytics取得
 - Workers、D1の実績値反映とR2未使用時の0表示
+- Windows引き継ぎ後のOAuth fetch修正を `npx wrangler deploy --keep-vars` で反映済み（Version ID: `733ac9fc-d825-44c0-ae6a-998b2bd41cd7`）
+
+## Windows側デプロイメモ
+
+Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` になる場合がある。その場合は、許可済みの別ディレクトリを `--outdir` に指定してから `--keep-vars` 付きでデプロイする。
 
 ## OAuth実機確認の残課題
 

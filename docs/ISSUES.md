@@ -12,7 +12,7 @@
 | 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCE、2権限での実アカウント接続、refresh/access tokenの独立revoke、再consentによる失効確認まで完了。401時のrefresh再試行、更新失敗code、再接続案内、`offline_access`をVersion `59958d74-3d4f-46b9-8c78-98f25c128c84`へ本番反映した。OAuth clientへ`Refresh Token` grantを追加後、refresh token・期限の発行と、接続直後・手動再取得でのAnalytics成功を確認した。access token期限切れ後の実refresh成功確認だけを残す。 |
 | 7 | CC-007 | Analytics読取scopeの実機検証 | P0 | 完了 | `account-analytics.read`でR2・Workers・D1を取得し、`account-settings.read`でアカウント一覧を取得できる。製品別scopeは不要。 |
 | 8 | CC-008 | R2実績連携 | P0 | 完了 | 2026-08-01 00:00〜08-24 07:12 UTCで、アプリとbucket Metricsの保存量0 B、Class A 20、Class B 10が一致した。請求概要の別期間値ではなく、bucket MetricsのCustom期間・UTCを比較に使う手順も確認した。 |
-| 9 | CC-009 | Workers・D1実績連携 | P1 | 一部完了 | 再取得後のWorkers requestsは3サービスで376・263・178、D1 readsは2502・261・348、writes合計459、storage合計364.544 kBとなりDashboardと表示丸め内で一致した。Workers Dashboardは7日超のCustom期間がNo dataになるため、全リクエストを含む7日表示で照合した。CPUは時間bucket別quantileの加重平均がDashboardの期間quantileと一致しない問題を特定し、GraphQLを`scriptName`単位の期間集計へ修正した。本番反映後のCPU P50/P99再照合を残す。 |
+| 9 | CC-009 | Workers・D1実績連携 | P1 | 一部完了 | 再取得後のWorkers requestsは3サービスで376・263・178、D1 readsは2502・261・348、writes合計459、storage合計364.544 kBとなりDashboardと表示丸め内で一致した。Workers Dashboardは7日超のCustom期間がNo dataになるため、全リクエストを含む7日表示で照合した。CPUは時間bucket別quantileの加重平均がDashboardの期間quantileと一致しない問題を特定し、GraphQLを`scriptName`単位の期間集計へ修正した。サービス別P50/P99を内訳へ表示し、本番での最終照合を残す。 |
 | 10 | CC-010 | 集計値の保存方針 | P0 | 完了 | token暗号化、30日セッション、400日の日次合計、明示的な接続解除時の履歴削除を実装する。リソース名は長期保存しない。 |
 | 11 | CC-011 | 月末予測 | P1 | 完了 | 今月の経過日数で操作量を補正し、Workers CPUはP50–P99の月末レンジを表示する。 |
 | 12 | CC-012 | 予算通知 | P2 | 一部完了 | 月額予算と50%、80%、100%の画面内アラートを実装済み。メール等の外部通知を別課題とする。 |

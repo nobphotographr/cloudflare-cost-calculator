@@ -275,7 +275,7 @@ function showConnectedSnapshot(snapshot, accountName = "デモアカウント") 
   document.querySelector("#liveD1").textContent = `${compact.format(snapshot.d1.rowsRead)} 行`;
   const resources = resourceCostRows(snapshot);
   renderResourceList("bucketUsage", resources.buckets, (row) => `${money(row.cost)} / ${row.storageGbMonth.toLocaleString("ja-JP", { maximumFractionDigits: 1 })} GB-mo`);
-  renderResourceList("scriptUsage", resources.scripts, (row) => `${money(row.cost)} / ${compact.format(row.requests)} req`);
+  renderResourceList("scriptUsage", resources.scripts, (row) => `${money(row.cost)} / ${compact.format(row.requests)} req / CPU P50 ${row.cpuTimeP50Ms.toLocaleString("ja-JP", { maximumFractionDigits: 3 })} ms · P99 ${row.cpuTimeP99Ms.toLocaleString("ja-JP", { maximumFractionDigits: 3 })} ms`);
   renderResourceList("databaseUsage", resources.databases, (row) => `${money(row.cost)} / ${compact.format(row.rowsRead)} reads`);
   const limitations = document.querySelector("#connectionLimitations");
   limitations.replaceChildren();

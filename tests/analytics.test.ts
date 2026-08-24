@@ -20,10 +20,10 @@ describe("Cloudflare Analytics集計", () => {
     expect(result.classB).toBe(24);
   });
 
-  it("WorkersのCPU quantileをrequest加重平均する", () => {
+  it("WorkersのCPU quantileをマイクロ秒からミリ秒へ変換してrequest加重平均する", () => {
     const result = aggregateWorkers({ workersInvocationsAdaptive: [
-      { dimensions: { scriptName: "a" }, sum: { requests: 100 }, quantiles: { cpuTimeP50: 5, cpuTimeP99: 20 } },
-      { dimensions: { scriptName: "b" }, sum: { requests: 300 }, quantiles: { cpuTimeP50: 7, cpuTimeP99: 30 } },
+      { dimensions: { scriptName: "a" }, sum: { requests: 100 }, quantiles: { cpuTimeP50: 5_000, cpuTimeP99: 20_000 } },
+      { dimensions: { scriptName: "b" }, sum: { requests: 300 }, quantiles: { cpuTimeP50: 7_000, cpuTimeP99: 30_000 } },
     ] });
     expect(result.requests).toBe(400);
     expect(result.cpuTimeP50Ms).toBe(6.5);

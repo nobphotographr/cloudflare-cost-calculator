@@ -136,11 +136,14 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
   }
 
   if (url.pathname === "/api/connect/callback" && request.method === "GET") {
+    let callbackStage = "configuration";
     try {
       const oauth = config(env);
+      callbackStage = "session";
       const state = url.searchParams.get("state") ?? "";
       const code = url.searchParams.get("code") ?? "";
-      if (url.searchParams.get("error")) throw new Error("OAuth authorization was declined");
+      const authorizationError = url.searchParams.get("error");
+      if (authorizationError) throw new Error(`OAuth authorization error: ${authorizationError}`);
       if (!code) throw new Error("OAuth code is missing");
       const cookieToken = cookieValue(request);
       const pending = await openPendingSession({
@@ -149,6 +152,7 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
         state,
         encryptionSecret: oauth.encryptionSecret,
       });
+      callbackStage = "token_exchange";
       const tokenSet = await exchangeCode({
         clientId: oauth.clientId,
         clientSecret: oauth.clientSecret,
@@ -156,8 +160,10 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
         code,
         codeVerifier: pending.codeVerifier,
       });
+      callbackStage = "account_lookup";
       const accounts = await listAuthorizedAccounts(tokenSet.accessToken);
       if (accounts.length === 0) throw new Error("No authorized Cloudflare account was returned");
+      callbackStage = "session_save";
       await connectSession({
         db: env.SESSIONS,
         sessionHash: pending.sessionHash,
@@ -173,7 +179,11 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
           "cache-control": "no-store",
         },
       });
-    } catch {
+    } catch (error) {
+      console.error("oauth_callback_failed", {
+        stage: callbackStage,
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
       return Response.redirect(`${url.origin}/?connection_error=1`, 302);
     }
   }

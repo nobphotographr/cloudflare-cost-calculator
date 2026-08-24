@@ -35,7 +35,7 @@ npm run dev
 
 CloudflareのOAuth client、D1、Worker secretsが必要です。設定値と実機検証の手順は [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md) にまとめています。
 
-現在のβ版は `https://cloudflare-cost-calculator.nobu-8yashi.workers.dev/` へデプロイ済みです。OAuth client設定が完了するまでは手入力とデモ接続を利用できます。
+現在のβ版は `https://cloudflare-cost-calculator.nobu-8yashi.workers.dev/` へデプロイ済みです。private OAuth clientによる実アカウント接続とAnalytics取得まで確認済みです。
 
 ## 料金ソース
 

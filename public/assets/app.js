@@ -110,7 +110,16 @@ function render() {
 }
 
 function setValue(id, nextValue) {
-  document.querySelector(`#${id}`).value = nextValue;
+  const normalized = typeof nextValue === "number" && Number.isFinite(nextValue)
+    ? Number(nextValue.toPrecision(12))
+    : nextValue;
+  document.querySelector(`#${id}`).value = normalized;
+}
+
+function setConnectionState(connected) {
+  const button = document.querySelector("#connectButton");
+  button.dataset.connected = connected ? "true" : "false";
+  button.textContent = connected ? "接続済み" : "Cloudflareに接続";
 }
 
 function renderResourceList(id, rows, describe) {
@@ -264,6 +273,7 @@ function showConnectedSnapshot(snapshot, accountName = "デモアカウント") 
   });
   document.querySelector("#connectionPanel").hidden = false;
   document.querySelector("#disconnectButton").hidden = snapshot.source === "demo";
+  setConnectionState(snapshot.source === "cloudflare");
   render();
   const center = estimateAll(readInput());
   const highInput = readInput();
@@ -331,6 +341,7 @@ async function loadSession() {
     });
     document.querySelector("#accountPicker").hidden = session.accounts.length <= 1;
     if (!session.selectedAccount && session.accounts.length > 1) {
+      setConnectionState(true);
       document.querySelector("#connectionPanel").hidden = false;
       document.querySelector("#connectionTitle").textContent = "対象アカウントを選択してください";
       document.querySelector("#connectionPeriod").textContent = "接続済み";
@@ -362,7 +373,13 @@ document.querySelector("#resetButton").addEventListener("click", () => {
 });
 
 const dialog = document.querySelector("#connectDialog");
-document.querySelector("#connectButton").addEventListener("click", () => dialog.showModal());
+document.querySelector("#connectButton").addEventListener("click", (event) => {
+  if (event.currentTarget.dataset.connected === "true") {
+    document.querySelector("#connectionPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  dialog.showModal();
+});
 document.querySelector("#closeDialog").addEventListener("click", () => dialog.close());
 document.querySelector("#oauthConnectButton").addEventListener("click", async () => {
   const message = document.querySelector("#dialogMessage");
@@ -417,6 +434,7 @@ document.querySelector("#saveBudget").addEventListener("click", async () => {
 document.querySelector("#disconnectButton").addEventListener("click", async () => {
   try { await fetchJson("/api/disconnect", { method: "POST" }); } catch { /* Hide local state even if revoke is unavailable. */ }
   document.querySelector("#connectionPanel").hidden = true;
+  setConnectionState(false);
   snapshotMode = "manual";
   activeBudget = 0;
   form.reset();

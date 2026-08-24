@@ -19,7 +19,8 @@
   ],
   "vars": {
     "ENVIRONMENT": "production",
-    "OAUTH_SCOPES": ""
+    "OAUTH_SCOPES": "account-analytics.read account-settings.read",
+    "OAUTH_REDIRECT_URI": "https://cloudflare-cost-calculator.nobu-8yashi.workers.dev/api/connect/callback"
   },
   "triggers": { "crons": ["17 3 * * *"] }
 }

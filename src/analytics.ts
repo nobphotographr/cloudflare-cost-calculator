@@ -35,15 +35,26 @@ export type UsageSnapshot = {
   limitations: string[];
 };
 
-type GraphQLResponse = { data?: { viewer?: { accounts?: Array<Record<string, unknown>> } }; errors?: unknown[] };
+type GraphQLResponse = {
+  data?: { viewer?: { accounts?: Array<Record<string, unknown>> } };
+  errors?: Array<{ message?: unknown }>;
+};
+
+function graphQLErrorMessage(payload: GraphQLResponse): string {
+  const messages = (payload.errors ?? [])
+    .map((error) => typeof error?.message === "string" ? error.message.trim() : "")
+    .filter(Boolean)
+    .slice(0, 3);
+  return messages.length ? messages.join(" | ") : "unknown GraphQL error";
+}
 
 async function queryGraphQL(input: {
   accessToken: string;
   query: string;
   variables: Record<string, unknown>;
-  fetcher: typeof fetch;
+  fetcher?: typeof fetch;
 }): Promise<Record<string, unknown>> {
-  const response = await input.fetcher(GRAPHQL_ENDPOINT, {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       authorization: `Bearer ${input.accessToken}`,
@@ -51,9 +62,17 @@ async function queryGraphQL(input: {
       "content-type": "application/json",
     },
     body: JSON.stringify({ query: input.query, variables: input.variables }),
-  });
+  };
+  // Cloudflare Workers の組み込み fetch は参照だけを渡して呼ぶと
+  // `Illegal invocation` になるため、実運用時はグローバル関数を直接呼ぶ。
+  const { fetcher } = input;
+  const response = fetcher
+    ? await fetcher(GRAPHQL_ENDPOINT, requestInit)
+    : await fetch(GRAPHQL_ENDPOINT, requestInit);
   const payload = await response.json() as GraphQLResponse;
-  if (!response.ok || payload.errors?.length) throw new Error(`Cloudflare Analytics request failed: HTTP ${response.status}`);
+  if (!response.ok || payload.errors?.length) {
+    throw new Error(`Cloudflare Analytics request failed: HTTP ${response.status}: ${graphQLErrorMessage(payload)}`);
+  }
   const account = payload.data?.viewer?.accounts?.[0];
   if (!account) throw new Error("Cloudflare Analytics returned no authorized account");
   return account;
@@ -128,8 +147,10 @@ export function aggregateWorkers(account: Record<string, unknown>): UsageSnapsho
     const dimensions = object(row.dimensions);
     const name = typeof dimensions.scriptName === "string" ? dimensions.scriptName : "(unknown)";
     const requests = numeric(object(row.sum).requests);
-    const p50 = numeric(object(row.quantiles).cpuTimeP50);
-    const p99 = numeric(object(row.quantiles).cpuTimeP99);
+    // workersInvocationsAdaptive の cpuTime quantile はマイクロ秒。
+    // 料金計算と画面入力はミリ秒なので、ここで単位を揃える。
+    const p50 = numeric(object(row.quantiles).cpuTimeP50) / 1_000;
+    const p99 = numeric(object(row.quantiles).cpuTimeP99) / 1_000;
     const current = scripts.get(name) ?? { requests: 0, weightedP50: 0, weightedP99: 0 };
     current.requests += requests;
     current.weightedP50 += requests * p50;
@@ -233,12 +254,20 @@ export async function loadAccountUsage(input: {
     start: start.toISOString().slice(0, 10),
     end: now.toISOString().slice(0, 10),
   };
-  const fetcher = input.fetcher ?? fetch;
+  const fetcher = input.fetcher;
   const [r2Result, workersResult, d1Result] = await Promise.allSettled([
     queryGraphQL({ accessToken: input.accessToken, query: R2_QUERY, variables, fetcher }),
     queryGraphQL({ accessToken: input.accessToken, query: WORKERS_QUERY, variables, fetcher }),
     queryGraphQL({ accessToken: input.accessToken, query: D1_QUERY, variables: dateVariables, fetcher }),
   ]);
+  for (const [product, result] of [["r2", r2Result], ["workers", workersResult], ["d1", d1Result]] as const) {
+    if (result.status === "rejected") {
+      console.error("analytics_query_failed", {
+        product,
+        message: result.reason instanceof Error ? result.reason.message : "unknown_error",
+      });
+    }
+  }
   const limitations: string[] = ["Workers CPU料金はP50を中心値、P99を上限参考値として推定します。"];
   if (r2Result.status === "rejected") limitations.push("R2の集計を取得できませんでした。権限または利用状況を確認してください。");
   if (workersResult.status === "rejected") limitations.push("Workersの集計を取得できませんでした。権限または利用状況を確認してください。");

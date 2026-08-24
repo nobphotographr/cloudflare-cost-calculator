@@ -5,11 +5,12 @@
 ## 1. Cloudflare側
 
 1. Cloudflare DashboardでOAuth clientを作成する。
-2. 開発中はprivate clientのままにする。
-3. Redirect URIへ `https://<公開URL>/api/connect/callback` を登録する。ローカル実機検証ではCloudflareに登録可能なlocalhost URIを使用する。
-4. `Account Analytics Read`を選択する（scope ID: `account-analytics.read`）。
-5. `Account Settings Read`を選択する（scope ID: `account-settings.read`）。アカウント一覧の取得に使用する。
-6. `offline_access`を要求する。期限切れaccess tokenをブラウザ操作なしで更新するためのrefresh token取得に使用する。
+2. Grant typeへ`Authorization Code`と`Refresh Token`を設定する。Cloudflareは`Refresh Token`追加時に`offline_access`をclient scopeへ自動追加する。
+3. 開発中はprivate clientのままにする。
+4. Redirect URIへ `https://<公開URL>/api/connect/callback` を登録する。ローカル実機検証ではCloudflareに登録可能なlocalhost URIを使用する。
+5. `Account Analytics Read`を選択する（scope ID: `account-analytics.read`）。
+6. `Account Settings Read`を選択する（scope ID: `account-settings.read`）。アカウント一覧の取得に使用する。
+7. Workerの認可要求では`offline_access`を含める。期限切れaccess tokenをブラウザ操作なしで更新するためのrefresh token取得に使用する。
 
 R2、Workers、D1それぞれの製品別Read scopeは、GraphQL Analyticsの集計取得には不要だった。Cloudflare API権限は必要最小限の上記2権限だけを指定する。
 
@@ -60,3 +61,4 @@ GraphQL Analyticsは集計遅延、保持期間、adaptive samplingの影響を�
 - R2未使用アカウントは警告ではなく0として表示できた。
 - 期限情報がないaccess tokenでも、GraphQLがHTTP 401を返した場合はrefresh tokenで1回だけ更新して全datasetを再取得する。refresh tokenを確実に要求するため`offline_access`も指定する。HTTP 429はrefreshせず、時間を置いた再取得を案内する。
 - token更新または更新後のAnalytics認証が拒否された場合は、機密値をログへ出さず理由codeだけを記録し、画面で再接続を案内する。
+- OAuth clientのGrant typeへ`Refresh Token`を追加後、再認可callbackで`account-analytics.read account-settings.read offline_access`を受け取り、refresh tokenとaccess token期限の両方が発行された。接続直後と手動再取得でR2 0、Workers 785→793 requests、D1 3,018 readsを取得した。

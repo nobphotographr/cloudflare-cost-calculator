@@ -9,7 +9,7 @@
 | 3 | CC-003 | 計算精度のケース検証 | P0 | 完了 | Cloudflare公式例と100GB短期保存などの代表ケースがテストに一致する。 |
 | 4 | CC-004 | アクセシビリティ・ブラウザ確認 | P1 | 完了 | キーボード操作、狭い画面、主要ブラウザで入力と結果更新に問題がない。 |
 | 5 | CC-005 | 料金更新運用 | P1 | 完了 | 料金ソース、確認日、差分確認手順を定義し、古い料金であることを検知できる。 |
-| 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCE、2権限での実アカウント接続、refresh/access tokenの独立revoke、再consentによる失効確認まで完了。2026-08-24に401時のrefresh再試行を本番反映したが、既存接続は3製品とも401のまま復帰せず、画面も失敗を黙って未接続表示に戻した。OIDC公開設定で`refresh_token` grantと`offline_access`対応を確認し、同scopeの追加、token metadataの非機密ログ、更新失敗code、再接続案内を追加した。本番再認可でrefresh token発行と期限後の実refresh成功確認を残す。 |
+| 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCE、2権限での実アカウント接続、refresh/access tokenの独立revoke、再consentによる失効確認まで完了。401時のrefresh再試行、更新失敗code、再接続案内、`offline_access`をVersion `59958d74-3d4f-46b9-8c78-98f25c128c84`へ本番反映した。OAuth clientへ`Refresh Token` grantを追加後、refresh token・期限の発行と、接続直後・手動再取得でのAnalytics成功を確認した。access token期限切れ後の実refresh成功確認だけを残す。 |
 | 7 | CC-007 | Analytics読取scopeの実機検証 | P0 | 完了 | `account-analytics.read`でR2・Workers・D1を取得し、`account-settings.read`でアカウント一覧を取得できる。製品別scopeは不要。 |
 | 8 | CC-008 | R2実績連携 | P0 | 一部完了 | 空bucketの保存量0 Bと、Class A/Bのaction分類が現行公式表と一致。実装はUTC月初集計なのに画面・READMEが直近30日と誤記していたため、正確なUTC開始・終了時刻と集計遅延・sampling注記を表示するよう修正した。旧比較は期間不一致のため、同一UTC期間で再照合する。 |
 | 9 | CC-009 | Workers・D1実績連携 | P1 | 一部完了 | D1の3 database ID対応と、公式どおりの`date_geq`・`date_leq`境界を確認。旧Dashboard比較はアプリのUTC月初集計に対して30日表示を使っていたため、正確なUTC期間表示と境界回帰テストを追加した。同一期間での再照合とWorkers Dashboard取得エラーの再確認を残す。 |

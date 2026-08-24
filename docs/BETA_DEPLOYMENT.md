@@ -20,7 +20,7 @@
 - `account-analytics.read account-settings.read`によるR2・Workers・D1 Analytics取得
 - Workers、D1の実績値反映とR2未使用時の0表示
 - Windows引き継ぎ後のOAuth fetch修正を `npx wrangler deploy --keep-vars` で反映済み（Version ID: `733ac9fc-d825-44c0-ae6a-998b2bd41cd7`）
-- 外部予算Webhook通知の実装をGitHubへpush済み（commit `f8ca8c3`）。本番反映は `0003_budget_notifications.sql` 適用と `--keep-vars` deployの直前承認待ち。
+- 外部予算Webhook通知の実装（commit `f8ca8c3`）と、atomic lease・送信先防御のMacレビュー修正（commit `5d800fa`）をGitHubへpush済み。本番反映は `0003_budget_notifications.sql` 適用と `--keep-vars` deployの直前承認待ち。
 
 ## Windows側デプロイメモ
 

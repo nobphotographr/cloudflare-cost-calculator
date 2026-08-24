@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateD1, aggregateR2, aggregateWorkers, analyticsPeriodLabel, demoUsage, loadAccountUsage } from "../src/analytics";
+import { AnalyticsAuthenticationError, aggregateD1, aggregateR2, aggregateWorkers, analyticsPeriodLabel, demoUsage, loadAccountUsage, loadAccountUsageWithAuthenticationRetry } from "../src/analytics";
 
 describe("Cloudflare Analytics集計", () => {
   it("UTC月初から現在までの比較可能な期間を表示する", () => {
@@ -122,5 +122,84 @@ describe("Cloudflare Analytics集計", () => {
     expect(result.workers.requests).toBe(0);
     expect(result.limitations).toContain("Workersの集計を取得できませんでした。権限または利用状況を確認してください。");
     expect(result.limitations).not.toContain("R2の集計を取得できませんでした。権限または利用状況を確認してください。");
+  });
+
+  it("401を部分障害の0件表示にせずtoken refreshへ返す", async () => {
+    const fetcher: typeof fetch = async () => new Response(JSON.stringify({
+      errors: [{ message: "Authentication error" }],
+    }), { status: 401, headers: { "content-type": "application/json" } });
+
+    await expect(loadAccountUsage({
+      accessToken: "expired-token",
+      accountId: "0".repeat(32),
+      fetcher,
+      now: new Date("2026-08-24T05:30:45.000Z"),
+    })).rejects.toBeInstanceOf(AnalyticsAuthenticationError);
+  });
+
+  it("401時にrefreshしたaccess tokenで全datasetを1回だけ再取得する", async () => {
+    let refreshes = 0;
+    let requests = 0;
+    const fetcher: typeof fetch = async (_input, init) => {
+      requests += 1;
+      const authorization = new Headers(init?.headers).get("authorization");
+      if (authorization === "Bearer expired-token") {
+        return new Response(JSON.stringify({ errors: [{ message: "Authentication error" }] }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      const payload = JSON.parse(String(init?.body)) as { query: string };
+      const account = payload.query.includes("CostR2")
+        ? { r2OperationsAdaptiveGroups: [], r2StorageAdaptiveGroups: [] }
+        : payload.query.includes("CostWorkers")
+          ? { workersInvocationsAdaptive: [] }
+          : { d1AnalyticsAdaptiveGroups: [], d1StorageAdaptiveGroups: [] };
+      return new Response(JSON.stringify({ data: { viewer: { accounts: [account] } } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    const result = await loadAccountUsageWithAuthenticationRetry({
+      accessToken: "expired-token",
+      accountId: "0".repeat(32),
+      fetcher,
+      now: new Date("2026-08-24T05:30:45.000Z"),
+      refreshAccessToken: async () => {
+        refreshes += 1;
+        return "refreshed-token";
+      },
+    });
+    expect(result.source).toBe("cloudflare");
+    expect(refreshes).toBe(1);
+    expect(requests).toBe(6);
+  });
+
+  it("429を権限エラーと区別して再取得待ちを案内する", async () => {
+    const fetcher: typeof fetch = async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as { query: string };
+      if (payload.query.includes("CostR2")) {
+        return new Response(JSON.stringify({ errors: [{ message: "Rate limited" }] }), {
+          status: 429,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      const account = payload.query.includes("CostWorkers")
+        ? { workersInvocationsAdaptive: [] }
+        : { d1AnalyticsAdaptiveGroups: [], d1StorageAdaptiveGroups: [] };
+      return new Response(JSON.stringify({ data: { viewer: { accounts: [account] } } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    const result = await loadAccountUsage({
+      accessToken: "token",
+      accountId: "0".repeat(32),
+      fetcher,
+      now: new Date("2026-08-24T05:30:45.000Z"),
+    });
+    expect(result.limitations).toContain("R2の集計はCloudflareのrate limitにより一時的に取得できませんでした。時間を置いて再取得してください。");
   });
 });

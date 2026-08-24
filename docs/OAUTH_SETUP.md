@@ -57,3 +57,4 @@ GraphQL Analyticsは集計遅延、保持期間、adaptive samplingの影響を�
 - `account-analytics.read`でR2、Workers、D1の3クエリが成功した。
 - WorkersのCPU quantileはGraphQLのマイクロ秒から料金計算用のミリ秒へ変換する。
 - R2未使用アカウントは警告ではなく0として表示できた。
+- 期限情報がないaccess tokenでも、GraphQLがHTTP 401を返した場合はrefresh tokenで1回だけ更新して全datasetを再取得する。HTTP 429はrefreshせず、時間を置いた再取得を案内する。

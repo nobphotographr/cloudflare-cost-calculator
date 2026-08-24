@@ -40,6 +40,14 @@ type GraphQLResponse = {
   errors?: Array<{ message?: unknown }>;
 };
 
+export class AnalyticsAuthenticationError extends Error {
+  override name = "AnalyticsAuthenticationError";
+}
+
+export class AnalyticsRateLimitError extends Error {
+  override name = "AnalyticsRateLimitError";
+}
+
 function graphQLErrorMessage(payload: GraphQLResponse): string {
   const messages = (payload.errors ?? [])
     .map((error) => typeof error?.message === "string" ? error.message.trim() : "")
@@ -71,7 +79,10 @@ async function queryGraphQL(input: {
     : await fetch(GRAPHQL_ENDPOINT, requestInit);
   const payload = await response.json() as GraphQLResponse;
   if (!response.ok || payload.errors?.length) {
-    throw new Error(`Cloudflare Analytics request failed: HTTP ${response.status}: ${graphQLErrorMessage(payload)}`);
+    const message = `Cloudflare Analytics request failed: HTTP ${response.status}: ${graphQLErrorMessage(payload)}`;
+    if (response.status === 401 || /authentication error/i.test(message)) throw new AnalyticsAuthenticationError(message);
+    if (response.status === 429 || /rate limit/i.test(message)) throw new AnalyticsRateLimitError(message);
+    throw new Error(message);
   }
   const account = payload.data?.viewer?.accounts?.[0];
   if (!account) throw new Error("Cloudflare Analytics returned no authorized account");
@@ -273,13 +284,19 @@ export async function loadAccountUsage(input: {
       });
     }
   }
+  if ([r2Result, workersResult, d1Result].some((result) => result.status === "rejected" && result.reason instanceof AnalyticsAuthenticationError)) {
+    throw new AnalyticsAuthenticationError("Cloudflare Analytics access token was rejected");
+  }
   const limitations: string[] = [
     "Workers CPU料金はP50を中心値、P99を上限参考値として推定します。",
     "Analyticsは集計遅延やadaptive samplingの影響を受けます。Dashboardと比較するときは同じUTC期間を指定してください。",
   ];
-  if (r2Result.status === "rejected") limitations.push("R2の集計を取得できませんでした。権限または利用状況を確認してください。");
-  if (workersResult.status === "rejected") limitations.push("Workersの集計を取得できませんでした。権限または利用状況を確認してください。");
-  if (d1Result.status === "rejected") limitations.push("D1の集計を取得できませんでした。権限または利用状況を確認してください。");
+  for (const [label, result] of [["R2", r2Result], ["Workers", workersResult], ["D1", d1Result]] as const) {
+    if (result.status !== "rejected") continue;
+    limitations.push(result.reason instanceof AnalyticsRateLimitError
+      ? `${label}の集計はCloudflareのrate limitにより一時的に取得できませんでした。時間を置いて再取得してください。`
+      : `${label}の集計を取得できませんでした。権限または利用状況を確認してください。`);
+  }
   return {
     source: "cloudflare",
     period: { start: start.toISOString(), end: now.toISOString(), label: analyticsPeriodLabel(start, now), daysObserved, daysInMonth },
@@ -288,6 +305,22 @@ export async function loadAccountUsage(input: {
     d1: d1Result.status === "fulfilled" ? aggregateD1(d1Result.value) : { rowsRead: 0, rowsWritten: 0, storageGb: 0, databases: [] },
     limitations,
   };
+}
+
+export async function loadAccountUsageWithAuthenticationRetry(input: {
+  accessToken: string;
+  accountId: string;
+  now?: Date;
+  fetcher?: typeof fetch;
+  refreshAccessToken?: () => Promise<string>;
+}): Promise<UsageSnapshot> {
+  try {
+    return await loadAccountUsage(input);
+  } catch (error) {
+    if (!(error instanceof AnalyticsAuthenticationError) || !input.refreshAccessToken) throw error;
+    const accessToken = await input.refreshAccessToken();
+    return loadAccountUsage({ ...input, accessToken });
+  }
 }
 
 export function demoUsage(): UsageSnapshot {

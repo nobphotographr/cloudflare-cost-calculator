@@ -1,4 +1,4 @@
-import { demoUsage, loadAccountUsage } from "./analytics";
+import { demoUsage, loadAccountUsageWithAuthenticationRetry } from "./analytics";
 import { listAuthorizedAccounts } from "./cloudflare";
 import { createOAuthRequest, exchangeCode, refreshToken, revokeTokenSet } from "./oauth";
 import { cleanupUsageHistory, deleteAccountData, getBudget, loadUsageHistory, saveUsageSnapshot, setBudget } from "./history";
@@ -13,6 +13,7 @@ import {
   selectAccount,
   updateTokenSet,
 } from "./session";
+import type { ConnectedSession } from "./session";
 
 type Env = {
   ASSETS: Fetcher;
@@ -95,11 +96,8 @@ async function connected(request: Request, env: Env) {
   return readConnectedSession({ db: env.SESSIONS, cookieToken: cookieValue(request), encryptionSecret });
 }
 
-async function freshSession(request: Request, env: Env) {
-  const session = await connected(request, env);
-  if (!session) return null;
-  const expiresAt = session.tokenSet.expiresAt ? Date.parse(session.tokenSet.expiresAt) : Number.POSITIVE_INFINITY;
-  if (expiresAt - Date.now() > 60_000 || !session.tokenSet.refreshToken) return session;
+async function refreshConnectedSession(session: ConnectedSession, env: Env): Promise<ConnectedSession> {
+  if (!session.tokenSet.refreshToken) return session;
   const oauth = config(env);
   const tokenSet = await refreshToken({
     clientId: oauth.clientId,
@@ -108,6 +106,14 @@ async function freshSession(request: Request, env: Env) {
   });
   await updateTokenSet({ db: env.SESSIONS, sessionHash: session.sessionHash, tokenSet, encryptionSecret: oauth.encryptionSecret });
   return { ...session, tokenSet };
+}
+
+async function freshSession(request: Request, env: Env): Promise<ConnectedSession | null> {
+  const session = await connected(request, env);
+  if (!session) return null;
+  const expiresAt = session.tokenSet.expiresAt ? Date.parse(session.tokenSet.expiresAt) : Number.POSITIVE_INFINITY;
+  if (expiresAt - Date.now() > 60_000 || !session.tokenSet.refreshToken) return session;
+  return refreshConnectedSession(session, env);
 }
 
 async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -209,16 +215,25 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
   }
 
   if (url.pathname === "/api/usage" && request.method === "GET") {
-    const session = await freshSession(request, env);
-    if (!session) return json({ error: "not_connected" }, 401);
-    if (!session.selectedAccount) return json({ error: "account_required", accounts: session.accounts }, 409);
     try {
-      const snapshot = await loadAccountUsage({ accessToken: session.tokenSet.accessToken, accountId: session.selectedAccount.id });
-      await saveUsageSnapshot(env.SESSIONS, session.selectedAccount.id, snapshot);
+      const initialSession = await freshSession(request, env);
+      if (!initialSession) return json({ error: "not_connected" }, 401);
+      if (!initialSession.selectedAccount) return json({ error: "account_required", accounts: initialSession.accounts }, 409);
+      let session: ConnectedSession = initialSession;
+      const selectedAccount = initialSession.selectedAccount;
+      const snapshot = await loadAccountUsageWithAuthenticationRetry({
+        accessToken: session.tokenSet.accessToken,
+        accountId: selectedAccount.id,
+        refreshAccessToken: session.tokenSet.refreshToken ? async () => {
+          session = await refreshConnectedSession(session, env);
+          return session.tokenSet.accessToken;
+        } : undefined,
+      });
+      await saveUsageSnapshot(env.SESSIONS, selectedAccount.id, snapshot);
       ctx.waitUntil(dispatchBudgetNotifications({
         db: env.SESSIONS,
-        accountId: session.selectedAccount.id,
-        accountName: session.selectedAccount.name,
+        accountId: selectedAccount.id,
+        accountName: selectedAccount.name,
         snapshot,
         encryptionSecret: config(env).encryptionSecret,
       }).catch((error) => {

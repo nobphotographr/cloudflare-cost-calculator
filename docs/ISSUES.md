@@ -9,7 +9,7 @@
 | 3 | CC-003 | 計算精度のケース検証 | P0 | 完了 | Cloudflare公式例と100GB短期保存などの代表ケースがテストに一致する。 |
 | 4 | CC-004 | アクセシビリティ・ブラウザ確認 | P1 | 完了 | キーボード操作、狭い画面、主要ブラウザで入力と結果更新に問題がない。 |
 | 5 | CC-005 | 料金更新運用 | P1 | 完了 | 料金ソース、確認日、差分確認手順を定義し、古い料金であることを検知できる。 |
-| 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCE、2権限での実アカウント再接続、Analytics再取得を確認済み。2026-08-24の実機切断でローカルセッション・設定削除は成功し、Connected Applicationsの認可は残った。従来実装はrevoke endpointの成否を画面へ返さないためtoken失効の成否は判別不能。refresh/access tokenを独立に失効し、失敗時に手動確認を案内する修正と自動テストを追加済み。本番反映後の再確認とtoken期限前refreshを残す。 |
+| 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCE、2権限での実アカウント接続、Analytics取得を確認済み。refresh/access tokenの独立revokeと失敗時案内を本番反映し、切断後に再consentが必要になることからtoken失効とローカルセッション削除を実機確認した。Connected Applicationsの一覧行はtoken revoke後も残り、Dashboardのgrant削除とは別動作。token期限前refreshの実機確認を残す。 |
 | 7 | CC-007 | Analytics読取scopeの実機検証 | P0 | 完了 | `account-analytics.read`でR2・Workers・D1を取得し、`account-settings.read`でアカウント一覧を取得できる。製品別scopeは不要。 |
 | 8 | CC-008 | R2実績連携 | P0 | 一部完了 | 実アカウントでクエリ成功と未使用時の0表示を確認済み。R2利用があるアカウントで保存量・Class A/Bを請求値と照合する。 |
 | 9 | CC-009 | Workers・D1実績連携 | P1 | 一部完了 | 実アカウントのWorkersリクエスト・CPU、D1行数・容量の取得と試算反映を確認済み。Dashboard表示との最終照合を行う。 |
@@ -20,6 +20,6 @@
 | 14 | CC-014 | 公開・商標表記 | P0 | 完了 | 非公式ツールであること、免責、Cloudflare商標・製品名を公開画面とREADMEへ記載する。 |
 | 15 | CC-015 | 接続後ダッシュボード | P0 | 完了 | アカウント選択、再取得、デモ、接続解除、バケット・Worker・DB別利用量をPC・スマートフォンで確認できる。 |
 | 16 | CC-016 | リソース別コスト順位 | P1 | 完了 | 無料枠適用前の料金寄与額をバケット・Worker・DB単位で計算し、高い順に表示する。 |
-| 17 | CC-017 | 外部予算通知 | P2 | 完了 | Webhook通知の非公開・予約IPとredirect拒否、10秒timeout、同一月・同一閾値のatomic leaseと冪等性key、失敗時6時間待機、通知履歴APIと接続画面UIを実装した。本番反映には`0003_budget_notifications.sql`の適用が必要。 |
+| 17 | CC-017 | 外部予算通知 | P2 | 完了 | Webhook通知の非公開・予約IPとredirect拒否、10秒timeout、同一月・同一閾値のatomic leaseと冪等性key、失敗時6時間待機、通知履歴APIと接続画面UIを実装した。`0003_budget_notifications.sql`とVersion `8316842a-38ae-4141-a309-8361167f1dd0`を本番反映済み。 |
 | 18 | CC-018 | 前月比較 | P1 | 完了 | 400日履歴APIから前月の最終スナップショットを選び、推定額の差額・増減率とデータ不足状態を表示する。 |
 | 19 | CC-019 | β版デプロイ | P0 | 完了 | 専用D1、マイグレーション、暗号化secret、Workers.devへの公開とhealth checkを完了する。 |

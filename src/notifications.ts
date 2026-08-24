@@ -4,6 +4,8 @@ import { estimateUsageSnapshot } from "./forecast";
 import { getBudget } from "./history";
 
 type Fetcher = typeof fetch;
+const WEBHOOK_TIMEOUT_MS = 10_000;
+const DELIVERY_LEASE_MS = 60_000;
 
 export type NotificationSettings = {
   enabled: boolean;
@@ -35,12 +37,13 @@ export type BudgetNotificationEvent = {
 type EventRow = {
   month_key: string;
   threshold_ratio: number;
-  status: "sent" | "failed";
+  status: "sending" | "sent" | "failed";
   estimate_usd: number;
   budget_usd: number;
   attempt_count: number;
   error_message: string | null;
   next_retry_at: string | null;
+  claim_token: string | null;
   updated_at: string;
 };
 
@@ -56,18 +59,38 @@ export function normalizeWebhookUrl(input: unknown): string | null {
   const url = new URL(trimmed);
   if (url.protocol !== "https:") throw new Error("Webhook URL must use HTTPS");
   if (url.username || url.password) throw new Error("Webhook URL must not include credentials");
-  const hostname = url.hostname.toLowerCase();
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]") {
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (isBlockedWebhookHostname(hostname)) {
     throw new Error("Webhook URL host is not allowed");
   }
   url.hash = "";
   return url.toString();
 }
 
+function isBlockedWebhookHostname(hostname: string): boolean {
+  if (!hostname || hostname.includes(":")) return true;
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local")
+    || hostname.endsWith(".internal") || hostname.endsWith(".home.arpa") || hostname === "metadata.google.internal") return true;
+  const parts = hostname.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d+$/.test(part))) return false;
+  const octets = parts.map(Number);
+  if (octets.some((part) => part < 0 || part > 255)) return true;
+  const [first, second, third] = octets;
+  return first === 0 || first === 10 || first === 127 || first >= 224
+    || (first === 100 && second >= 64 && second <= 127)
+    || (first === 169 && second === 254)
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 0 && third === 0)
+    || (first === 192 && second === 0 && third === 2)
+    || (first === 192 && second === 168)
+    || (first === 198 && (second === 18 || second === 19))
+    || (first === 198 && second === 51 && third === 100)
+    || (first === 203 && second === 0 && third === 113);
+}
+
 export function maskWebhookUrl(value: string): string {
   const url = new URL(value);
-  const firstPath = url.pathname.split("/").filter(Boolean)[0];
-  return firstPath ? `${url.origin}/${firstPath}/...` : `${url.origin}/...`;
+  return `${url.origin}/...`;
 }
 
 export function monthKeyForSnapshot(snapshot: UsageSnapshot): string {
@@ -78,7 +101,7 @@ export function dueBudgetThresholds(input: {
   monthlyBudgetUsd: number;
   estimateUsd: number;
   thresholds: number[];
-  events: Array<{ thresholdRatio: number; status: "sent" | "failed"; nextRetryAt: string | null }>;
+  events: Array<{ thresholdRatio: number; status: "sending" | "sent" | "failed"; nextRetryAt: string | null }>;
   now: Date;
 }): number[] {
   if (!(input.monthlyBudgetUsd > 0) || !(input.estimateUsd > 0)) return [];
@@ -116,14 +139,25 @@ export function buildBudgetWebhookPayload(input: {
   };
 }
 
-async function postWebhook(url: string, payload: unknown, fetcher?: Fetcher): Promise<void> {
+export async function postWebhook(url: string, payload: unknown, fetcher?: Fetcher, idempotencyKey?: string): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
   const init: RequestInit = {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
+    },
     body: JSON.stringify(payload),
+    redirect: "error",
+    signal: controller.signal,
   };
-  const response = fetcher ? await fetcher(url, init) : await fetch(url, init);
-  if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}`);
+  try {
+    const response = fetcher ? await fetcher(url, init) : await fetch(url, init);
+    if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}`);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function fromSettingsRow(row: NotificationSettingsRow | null, webhookUrl: string | null): NotificationSettings {
@@ -181,12 +215,12 @@ export async function loadNotificationEvents(db: D1Database, accountId: string, 
   const safeLimit = Math.max(1, Math.min(50, Math.trunc(limit)));
   const result = await db.prepare(`SELECT month_key, threshold_ratio, status, estimate_usd, budget_usd,
       attempt_count, error_message, next_retry_at, updated_at
-    FROM budget_notification_events WHERE account_hash = ?1 ORDER BY updated_at DESC LIMIT ?2`)
+    FROM budget_notification_events WHERE account_hash = ?1 AND status IN ('sent', 'failed') ORDER BY updated_at DESC LIMIT ?2`)
     .bind(await notificationAccountHash(accountId), safeLimit).all<EventRow>();
   return (result.results ?? []).map((row) => ({
     monthKey: row.month_key,
     thresholdRatio: row.threshold_ratio,
-    status: row.status,
+    status: row.status === "sent" ? "sent" : "failed",
     estimateUsd: row.estimate_usd,
     budgetUsd: row.budget_usd,
     attemptCount: row.attempt_count,
@@ -198,10 +232,42 @@ export async function loadNotificationEvents(db: D1Database, accountId: string, 
 
 async function monthEvents(db: D1Database, accountHash: string, monthKey: string): Promise<EventRow[]> {
   const result = await db.prepare(`SELECT month_key, threshold_ratio, status, estimate_usd, budget_usd,
-      attempt_count, error_message, next_retry_at, updated_at
+      attempt_count, error_message, next_retry_at, claim_token, updated_at
     FROM budget_notification_events WHERE account_hash = ?1 AND month_key = ?2`)
     .bind(accountHash, monthKey).all<EventRow>();
   return result.results ?? [];
+}
+
+async function claimNotification(input: {
+  db: D1Database;
+  accountHash: string;
+  monthKey: string;
+  threshold: number;
+  estimateUsd: number;
+  budgetUsd: number;
+  now: Date;
+}): Promise<{ claimToken: string; attemptCount: number } | null> {
+  const claimToken = crypto.randomUUID();
+  const nowIso = input.now.toISOString();
+  const leaseUntil = new Date(input.now.getTime() + DELIVERY_LEASE_MS).toISOString();
+  const result = await input.db.prepare(`INSERT INTO budget_notification_events
+      (account_hash, month_key, threshold_ratio, status, estimate_usd, budget_usd, attempt_count,
+       error_message, next_retry_at, claim_token, created_at, updated_at)
+    VALUES (?1, ?2, ?3, 'sending', ?4, ?5, 1, NULL, ?6, ?7, ?8, ?8)
+    ON CONFLICT(account_hash, month_key, threshold_ratio) DO UPDATE SET
+      status = 'sending', estimate_usd = excluded.estimate_usd, budget_usd = excluded.budget_usd,
+      attempt_count = budget_notification_events.attempt_count + 1,
+      error_message = NULL, next_retry_at = excluded.next_retry_at,
+      claim_token = excluded.claim_token, updated_at = excluded.updated_at
+    WHERE budget_notification_events.status != 'sent'
+      AND (budget_notification_events.next_retry_at IS NULL OR budget_notification_events.next_retry_at <= ?9)`)
+    .bind(input.accountHash, input.monthKey, input.threshold, input.estimateUsd, input.budgetUsd,
+      leaseUntil, claimToken, nowIso, nowIso).run();
+  if ((result.meta.changes ?? 0) !== 1) return null;
+  const row = await input.db.prepare(`SELECT attempt_count FROM budget_notification_events
+    WHERE account_hash = ?1 AND month_key = ?2 AND threshold_ratio = ?3 AND claim_token = ?4`)
+    .bind(input.accountHash, input.monthKey, input.threshold, claimToken).first<{ attempt_count: number }>();
+  return row ? { claimToken, attemptCount: row.attempt_count } : null;
 }
 
 export async function dispatchBudgetNotifications(input: {
@@ -233,7 +299,17 @@ export async function dispatchBudgetNotifications(input: {
   });
   const dispatched: BudgetNotificationEvent[] = [];
   for (const threshold of thresholds) {
-    const createdAt = existing.find((event) => event.threshold_ratio === threshold)?.updated_at ?? now.toISOString();
+    const claim = await claimNotification({
+      db: input.db,
+      accountHash,
+      monthKey,
+      threshold,
+      estimateUsd,
+      budgetUsd: budget.monthlyBudgetUsd,
+      now,
+    });
+    if (!claim) continue;
+    const idempotencyKey = await sha256(`cloud-cost-budget:${accountHash}:${monthKey}:${threshold}`);
     try {
       await postWebhook(webhookUrl, buildBudgetWebhookPayload({
         accountName: input.accountName,
@@ -242,28 +318,20 @@ export async function dispatchBudgetNotifications(input: {
         estimateUsd,
         budgetUsd: budget.monthlyBudgetUsd,
         periodLabel: input.snapshot.period.label,
-      }), input.fetcher);
-      await input.db.prepare(`INSERT INTO budget_notification_events
-        (account_hash, month_key, threshold_ratio, status, estimate_usd, budget_usd, attempt_count, error_message, next_retry_at, created_at, updated_at)
-        VALUES (?1, ?2, ?3, 'sent', ?4, ?5, 1, NULL, NULL, ?6, ?6)
-        ON CONFLICT(account_hash, month_key, threshold_ratio) DO UPDATE SET status = 'sent',
-          estimate_usd = excluded.estimate_usd, budget_usd = excluded.budget_usd,
-          attempt_count = budget_notification_events.attempt_count + 1,
-          error_message = NULL, next_retry_at = NULL, updated_at = excluded.updated_at`)
-        .bind(accountHash, monthKey, threshold, estimateUsd, budget.monthlyBudgetUsd, now.toISOString()).run();
-      dispatched.push({ monthKey, thresholdRatio: threshold, status: "sent", estimateUsd, budgetUsd: budget.monthlyBudgetUsd, attemptCount: 1, errorMessage: null, nextRetryAt: null, updatedAt: now.toISOString() });
+      }), input.fetcher, idempotencyKey);
+      await input.db.prepare(`UPDATE budget_notification_events SET status = 'sent', error_message = NULL,
+        next_retry_at = NULL, claim_token = NULL, updated_at = ?1
+        WHERE account_hash = ?2 AND month_key = ?3 AND threshold_ratio = ?4 AND claim_token = ?5`)
+        .bind(now.toISOString(), accountHash, monthKey, threshold, claim.claimToken).run();
+      dispatched.push({ monthKey, thresholdRatio: threshold, status: "sent", estimateUsd, budgetUsd: budget.monthlyBudgetUsd, attemptCount: claim.attemptCount, errorMessage: null, nextRetryAt: null, updatedAt: now.toISOString() });
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 180) : "Webhook failed";
       const retryAt = new Date(now.getTime() + 6 * 60 * 60 * 1000).toISOString();
-      await input.db.prepare(`INSERT INTO budget_notification_events
-        (account_hash, month_key, threshold_ratio, status, estimate_usd, budget_usd, attempt_count, error_message, next_retry_at, created_at, updated_at)
-        VALUES (?1, ?2, ?3, 'failed', ?4, ?5, 1, ?6, ?7, ?8, ?9)
-        ON CONFLICT(account_hash, month_key, threshold_ratio) DO UPDATE SET status = 'failed',
-          estimate_usd = excluded.estimate_usd, budget_usd = excluded.budget_usd,
-          attempt_count = budget_notification_events.attempt_count + 1,
-          error_message = excluded.error_message, next_retry_at = excluded.next_retry_at, updated_at = excluded.updated_at`)
-        .bind(accountHash, monthKey, threshold, estimateUsd, budget.monthlyBudgetUsd, message, retryAt, createdAt, now.toISOString()).run();
-      dispatched.push({ monthKey, thresholdRatio: threshold, status: "failed", estimateUsd, budgetUsd: budget.monthlyBudgetUsd, attemptCount: 1, errorMessage: message, nextRetryAt: retryAt, updatedAt: now.toISOString() });
+      await input.db.prepare(`UPDATE budget_notification_events SET status = 'failed', error_message = ?1,
+        next_retry_at = ?2, claim_token = NULL, updated_at = ?3
+        WHERE account_hash = ?4 AND month_key = ?5 AND threshold_ratio = ?6 AND claim_token = ?7`)
+        .bind(message, retryAt, now.toISOString(), accountHash, monthKey, threshold, claim.claimToken).run();
+      dispatched.push({ monthKey, thresholdRatio: threshold, status: "failed", estimateUsd, budgetUsd: budget.monthlyBudgetUsd, attemptCount: claim.attemptCount, errorMessage: message, nextRetryAt: retryAt, updatedAt: now.toISOString() });
     }
   }
   return dispatched;

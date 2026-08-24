@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { demoUsage } from "../src/analytics";
 import { estimateUsageSnapshot, projectionFactor } from "../src/forecast";
-import { buildBudgetWebhookPayload, dueBudgetThresholds, maskWebhookUrl, normalizeWebhookUrl } from "../src/notifications";
+import { buildBudgetWebhookPayload, dueBudgetThresholds, maskWebhookUrl, normalizeWebhookUrl, postWebhook } from "../src/notifications";
 
 describe("外部予算通知", () => {
   it("接続版usage snapshotから月末予測額をサーバー側で算出する", () => {
@@ -16,10 +16,24 @@ describe("外部予算通知", () => {
   it("HTTPSのWebhookだけを保存対象にし、表示用にはsecret pathを伏せる", () => {
     const url = normalizeWebhookUrl("https://hooks.example.com/services/T000/B000/secret#fragment");
     expect(url).toBe("https://hooks.example.com/services/T000/B000/secret");
-    expect(maskWebhookUrl(url ?? "")).toBe("https://hooks.example.com/services/...");
+    expect(maskWebhookUrl(url ?? "")).toBe("https://hooks.example.com/...");
     expect(() => normalizeWebhookUrl("http://hooks.example.com/test")).toThrow(/HTTPS/);
     expect(() => normalizeWebhookUrl("https://user:pass@example.com/test")).toThrow(/credentials/);
     expect(() => normalizeWebhookUrl("https://localhost/test")).toThrow(/not allowed/);
+    expect(() => normalizeWebhookUrl("https://localhost./test")).toThrow(/not allowed/);
+    expect(() => normalizeWebhookUrl("https://169.254.169.254/latest/meta-data")).toThrow(/not allowed/);
+    expect(() => normalizeWebhookUrl("https://10.0.0.8/test")).toThrow(/not allowed/);
+    expect(() => normalizeWebhookUrl("https://[::1]/test")).toThrow(/not allowed/);
+  });
+
+  it("Webhook送信はredirectを拒否し、冪等性keyを付ける", async () => {
+    let captured: RequestInit | undefined;
+    await postWebhook("https://hooks.example.com/test", { ok: true }, async (_url, init) => {
+      captured = init;
+      return new Response(null, { status: 204 });
+    }, "event-key");
+    expect(captured?.redirect).toBe("error");
+    expect(new Headers(captured?.headers).get("idempotency-key")).toBe("event-key");
   });
 
   it("当月に未送信で到達済みの閾値だけを送信対象にする", () => {
@@ -36,6 +50,24 @@ describe("外部予算通知", () => {
       now,
     });
     expect(due).toEqual([0.8]);
+  });
+
+  it("送信中leaseが切れるまで同じ閾値を再取得しない", () => {
+    const now = new Date("2026-08-24T12:00:00.000Z");
+    expect(dueBudgetThresholds({
+      monthlyBudgetUsd: 10,
+      estimateUsd: 12,
+      thresholds: [1],
+      events: [{ thresholdRatio: 1, status: "sending", nextRetryAt: "2026-08-24T12:01:00.000Z" }],
+      now,
+    })).toEqual([]);
+    expect(dueBudgetThresholds({
+      monthlyBudgetUsd: 10,
+      estimateUsd: 12,
+      thresholds: [1],
+      events: [{ thresholdRatio: 1, status: "sending", nextRetryAt: "2026-08-24T11:59:00.000Z" }],
+      now,
+    })).toEqual([1]);
   });
 
   it("Webhook payloadに予算額、予測額、閾値を含める", () => {

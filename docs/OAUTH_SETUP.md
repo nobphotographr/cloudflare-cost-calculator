@@ -66,3 +66,4 @@ R2は請求概要ではなく対象bucketの **Metrics** でCustom期間とUTC�
 - OAuth clientのGrant typeへ`Refresh Token`を追加後、再認可callbackで`account-analytics.read account-settings.read offline_access`を受け取り、refresh tokenとaccess token期限の両方が発行された。接続直後と手動再取得でR2 0、Workers 785→793 requests、D1 3,018 readsを取得した。
 - R2 bucket Metricsを2026-08-01 00:00〜08-24 07:12 UTCへ合わせ、保存量0 B、Class A 20、Class B 10が一致した。
 - 07:23 UTCの再取得でWorkers requests 376・263・178、D1 reads 2502・261・348、writes合計459、storage合計364.544 kBがDashboardと表示丸め内で一致した。
+- CPU期間集計修正後、requests 404・268・178はDashboardと一致した。Cloud CostのP50/P99も0.798/8.523 ms対0.81/8.84 msで一致したが、HandoffとInstallerはadaptive集計差が残った。Dashboardが7日超のCustom期間を返せない間は同一期間の完全一致を確認できないため、サービス別P50/P99と期間を記録して推定値として扱う。

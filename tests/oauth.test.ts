@@ -45,9 +45,9 @@ describe("Cloudflare OAuth", () => {
   });
 
   it("refresh tokenを引き継ぎ、切断時に失効させる", async () => {
-    let calls = 0;
-    const fetcher: typeof fetch = async (request) => {
-      calls += 1;
+    const requests: Array<{ url: string; body: string }> = [];
+    const fetcher: typeof fetch = async (request, init) => {
+      requests.push({ url: String(request), body: String(init?.body) });
       if (String(request).endsWith("/token")) {
         return new Response(JSON.stringify({ access_token: "new-access", token_type: "Bearer", expires_in: 60 }), {
           status: 200,
@@ -59,6 +59,9 @@ describe("Cloudflare OAuth", () => {
     const refreshed = await refreshToken({ clientId: "client", clientSecret: "secret", refreshToken: "old-refresh", fetcher });
     expect(refreshed.refreshToken).toBe("old-refresh");
     await revokeToken({ clientId: "client", clientSecret: "secret", token: "old-refresh", fetcher });
-    expect(calls).toBe(2);
+    expect(requests).toEqual([
+      { url: "https://dash.cloudflare.com/oauth2/token", body: "grant_type=refresh_token&refresh_token=old-refresh" },
+      { url: "https://dash.cloudflare.com/oauth2/revoke", body: "token=old-refresh&token_type_hint=refresh_token" },
+    ]);
   });
 });

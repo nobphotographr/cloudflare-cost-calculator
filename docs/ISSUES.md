@@ -9,7 +9,7 @@
 | 3 | CC-003 | 計算精度のケース検証 | P0 | 完了 | Cloudflare公式例と100GB短期保存などの代表ケースがテストに一致する。 |
 | 4 | CC-004 | アクセシビリティ・ブラウザ確認 | P1 | 完了 | キーボード操作、狭い画面、主要ブラウザで入力と結果更新に問題がない。 |
 | 5 | CC-005 | 料金更新運用 | P1 | 完了 | 料金ソース、確認日、差分確認手順を定義し、古い料金であることを検知できる。 |
-| 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCEと実アカウント接続を確認済み。token期限前のrefresh、接続解除時のrevokeを実機確認する。 |
+| 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCEと実アカウント接続を確認済み。Windows側でrefresh/revokeの自動テストを追加済み。token期限前のrefresh、接続解除時のrevokeを実機確認する。 |
 | 7 | CC-007 | Analytics読取scopeの実機検証 | P0 | 完了 | `account-analytics.read`でR2・Workers・D1を取得し、`account-settings.read`でアカウント一覧を取得できる。製品別scopeは不要。 |
 | 8 | CC-008 | R2実績連携 | P0 | 一部完了 | 実アカウントでクエリ成功と未使用時の0表示を確認済み。R2利用があるアカウントで保存量・Class A/Bを請求値と照合する。 |
 | 9 | CC-009 | Workers・D1実績連携 | P1 | 一部完了 | 実アカウントのWorkersリクエスト・CPU、D1行数・容量の取得と試算反映を確認済み。Dashboard表示との最終照合を行う。 |

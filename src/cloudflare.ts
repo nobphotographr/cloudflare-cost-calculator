@@ -1,9 +1,12 @@
 import type { AccountOption } from "./session";
 
-export async function listAuthorizedAccounts(accessToken: string, fetcher: typeof fetch = fetch): Promise<AccountOption[]> {
-  const response = await fetcher("https://api.cloudflare.com/client/v4/accounts?per_page=50", {
+export async function listAuthorizedAccounts(accessToken: string, fetcher?: typeof fetch): Promise<AccountOption[]> {
+  const requestInit: RequestInit = {
     headers: { authorization: `Bearer ${accessToken}`, accept: "application/json" },
-  });
+  };
+  const response = fetcher
+    ? await fetcher("https://api.cloudflare.com/client/v4/accounts?per_page=50", requestInit)
+    : await fetch("https://api.cloudflare.com/client/v4/accounts?per_page=50", requestInit);
   const payload = await response.json() as Record<string, unknown>;
   if (!response.ok || payload.success !== true || !Array.isArray(payload.result)) {
     throw new Error(`Cloudflare account lookup failed: HTTP ${response.status}`);

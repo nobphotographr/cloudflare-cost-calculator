@@ -68,14 +68,17 @@ async function tokenRequest(body: URLSearchParams, input: {
   nowMs?: number;
   oldRefreshToken?: string;
 }): Promise<OAuthTokenSet> {
-  const response = await (input.fetcher ?? fetch)(OAUTH_ENDPOINTS.token, {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       authorization: basicAuthorization(input.clientId, input.clientSecret),
       "content-type": "application/x-www-form-urlencoded",
     },
     body,
-  });
+  };
+  const response = input.fetcher
+    ? await input.fetcher(OAUTH_ENDPOINTS.token, requestInit)
+    : await fetch(OAUTH_ENDPOINTS.token, requestInit);
   const payload = await response.json() as Record<string, unknown>;
   if (!response.ok) throw new Error(`OAuth token request failed: ${String(payload.error ?? response.status)}`);
   return tokenSet(payload, input.nowMs, input.oldRefreshToken);
@@ -121,14 +124,17 @@ export async function refreshToken(input: {
 export async function revokeToken(input: {
   clientId: string; clientSecret: string; token: string; fetcher?: typeof fetch;
 }): Promise<void> {
-  const response = await (input.fetcher ?? fetch)(OAUTH_ENDPOINTS.revoke, {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       authorization: basicAuthorization(input.clientId, input.clientSecret),
       "content-type": "application/x-www-form-urlencoded",
     },
     body: new URLSearchParams({ token: input.token, token_type_hint: "refresh_token" }),
-  });
+  };
+  const response = input.fetcher
+    ? await input.fetcher(OAUTH_ENDPOINTS.revoke, requestInit)
+    : await fetch(OAUTH_ENDPOINTS.revoke, requestInit);
   if (!response.ok) throw new Error(`OAuth token revocation failed: HTTP ${response.status}`);
 }
 

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Cloudflare R2 / Workers / D1 の利用料金を事前に試算するWebツール",
   "scripts": {
-    "test": "node --test tests/pricing.test.mjs && vitest run tests/*.test.ts",
+    "test": "node --test tests/pricing.test.mjs && vitest run --dir tests --exclude=**/*.mjs",
     "check": "tsc --noEmit",
     "dev": "wrangler dev --local --persist-to .wrangler/state --var ENVIRONMENT:local",
     "serve": "python3 -m http.server 4178 -d public",

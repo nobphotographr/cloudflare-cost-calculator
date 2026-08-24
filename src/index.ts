@@ -1,6 +1,6 @@
-import { demoUsage, loadAccountUsageWithAuthenticationRetry } from "./analytics";
+import { AnalyticsAuthenticationError, demoUsage, loadAccountUsageWithAuthenticationRetry } from "./analytics";
 import { listAuthorizedAccounts } from "./cloudflare";
-import { createOAuthRequest, exchangeCode, refreshToken, revokeTokenSet } from "./oauth";
+import { createOAuthRequest, exchangeCode, OAuthTokenRequestError, refreshToken, revokeTokenSet } from "./oauth";
 import { cleanupUsageHistory, deleteAccountData, getBudget, loadUsageHistory, saveUsageSnapshot, setBudget } from "./history";
 import { dispatchBudgetNotifications, getNotificationSettings, loadNotificationEvents, saveNotificationSettings } from "./notifications";
 import {
@@ -167,6 +167,10 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
         code,
         codeVerifier: pending.codeVerifier,
       });
+      console.log("oauth_token_received", {
+        refreshTokenAvailable: Boolean(tokenSet.refreshToken),
+        expirationAvailable: Boolean(tokenSet.expiresAt),
+      });
       callbackStage = "account_lookup";
       const accounts = await listAuthorizedAccounts(tokenSet.accessToken);
       if (accounts.length === 0) throw new Error("No authorized Cloudflare account was returned");
@@ -242,7 +246,14 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
         });
       }));
       return json(snapshot);
-    } catch {
+    } catch (error) {
+      if (error instanceof OAuthTokenRequestError || error instanceof AnalyticsAuthenticationError) {
+        console.error("analytics_reconnect_required", {
+          reason: error instanceof OAuthTokenRequestError ? error.oauthCode : "access_token_rejected",
+        });
+        return json({ error: "reconnect_required" }, 401);
+      }
+      console.error("analytics_usage_failed", { reason: "unexpected_error" });
       return json({ error: "analytics_failed" }, 502);
     }
   }

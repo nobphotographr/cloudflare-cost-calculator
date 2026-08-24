@@ -13,6 +13,14 @@ export type OAuthTokenSet = {
   expiresAt?: string;
 };
 
+export class OAuthTokenRequestError extends Error {
+  override name = "OAuthTokenRequestError";
+
+  constructor(public readonly oauthCode: string) {
+    super(`OAuth token request failed: ${oauthCode}`);
+  }
+}
+
 export async function createOAuthRequest(input: {
   clientId: string;
   redirectUri: string;
@@ -79,8 +87,12 @@ async function tokenRequest(body: URLSearchParams, input: {
   const response = input.fetcher
     ? await input.fetcher(OAUTH_ENDPOINTS.token, requestInit)
     : await fetch(OAUTH_ENDPOINTS.token, requestInit);
-  const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok) throw new Error(`OAuth token request failed: ${String(payload.error ?? response.status)}`);
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    const rawCode = typeof payload.error === "string" ? payload.error : `http_${response.status}`;
+    const oauthCode = /^[a-z0-9_.-]+$/i.test(rawCode) ? rawCode : `http_${response.status}`;
+    throw new OAuthTokenRequestError(oauthCode);
+  }
   return tokenSet(payload, input.nowMs, input.oldRefreshToken);
 }
 

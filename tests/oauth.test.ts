@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOAuthRequest, exchangeCode, refreshToken, revokeTokenSet } from "../src/oauth";
+import { createOAuthRequest, exchangeCode, OAuthTokenRequestError, refreshToken, revokeTokenSet } from "../src/oauth";
 
 describe("Cloudflare OAuth", () => {
   it("PKCE付きの認可URLを作る", async () => {
@@ -71,6 +71,26 @@ describe("Cloudflare OAuth", () => {
       { url: "https://dash.cloudflare.com/oauth2/revoke", body: "token=old-refresh&token_type_hint=refresh_token" },
       { url: "https://dash.cloudflare.com/oauth2/revoke", body: "token=new-access&token_type_hint=access_token" },
     ]);
+  });
+
+  it("token endpointの失敗を機密値なしのcodeで分類する", async () => {
+    const fetcher: typeof fetch = async () => new Response(JSON.stringify({
+      error: "invalid_grant",
+      error_description: "sensitive provider detail",
+    }), { status: 400, headers: { "content-type": "application/json" } });
+
+    const request = refreshToken({
+      clientId: "client",
+      clientSecret: "secret",
+      refreshToken: "expired-refresh-token",
+      fetcher,
+    });
+
+    await expect(request).rejects.toMatchObject({
+      name: "OAuthTokenRequestError",
+      oauthCode: "invalid_grant",
+      message: "OAuth token request failed: invalid_grant",
+    } satisfies Partial<OAuthTokenRequestError>);
   });
 
   it("一方のtoken失効が失敗しても他方を試す", async () => {

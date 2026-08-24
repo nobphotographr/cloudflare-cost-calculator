@@ -34,11 +34,12 @@ Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` �
 - 2026-08-24に承認を得てCloud Costの接続解除・手動revoke・再接続を実施した。アプリ側のセッション・設定削除は成功し、Connected Applicationsの認可は残った。token revocation endpointの成功・失敗を画面へ返さない従来実装だったため、token自体の失効成否はこの試行からは判別できない。Dashboardから手動解除した後、`account-analytics.read account-settings.read`の2権限で再認可し、Workers 595 requests、D1 676 readsを含むAnalytics再取得まで成功した。
 - 上記を受けて、refresh/access tokenを独立に失効し、どちらかの要求が失敗した場合はConnected Applicationsでの手動確認を案内する修正を追加した。本番反映後の再切断では両revoke要求が成功し、ローカル接続状態が削除された。Connected Applicationsの一覧行は残るが、再接続時に2権限のconsentが再表示されたためtoken失効を確認できた。再認可後はWorkers 621 requests、D1 712 reads、R2 0を取得した。
 - その後の既存接続でWorkers・D1がHTTP 401、R2が429を返す状態を実機観測した。token応答に期限がない場合は自動refreshを行わず、401も製品別の0件表示に変換していたことが原因。401を認証失敗として上位へ返し、refresh tokenで1回だけ更新して全datasetを再取得する修正を追加した。429は権限エラーと分け、時間を置いた再取得を案内する。
+- Version `a43d0258-6797-4056-9c8f-6bacb0ac05c9`へ上記修正を反映した後、既存接続でR2・Workers・D1すべてのHTTP 401を再現し、自動復帰しないことを確認した。Cloudflareの公開OIDC設定は`refresh_token` grantと`offline_access` scopeを案内しているため、OAuth要求へ`offline_access`を追加した。token値を出さずrefresh token・期限の有無だけを記録し、更新拒否時は理由codeと再接続案内を返す。
 - D1 restoreは未実行。Handoffの本番データ削除・OAuth revokeも未実行。
 
 ## OAuth実機確認の残課題
 
-1. 401時のrefresh修正を本番へ反映し、既存接続が再認可なしでAnalytics取得へ復帰することを確認する。
+1. `offline_access`追加と再接続案内を本番へ反映して再認可し、refresh token発行を非機密metadataログで確認する。その後、期限切れ時に再認可なしでAnalytics取得へ復帰することを確認する。
 2. R2は空bucketの保存量0 Bが一致した。旧比較はアプリのUTC月初集計に対してDashboardの請求期間表示を使っており、画面側も誤って「直近30日」と案内していた。同じUTC開始・終了時刻を表示する修正後にClass A/Bを再照合する。
 3. D1は3 database IDの対応を確認した。旧比較はアプリのUTC月初集計とDashboardの30日表示で期間が一致していなかったため参考値とし、同一UTC期間で再照合する。WorkersのDashboard表示はCloudflare側の取得エラーが解消した後に同じ期間で確認する。
 

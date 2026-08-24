@@ -9,8 +9,9 @@
 3. Redirect URIへ `https://<公開URL>/api/connect/callback` を登録する。ローカル実機検証ではCloudflareに登録可能なlocalhost URIを使用する。
 4. `Account Analytics Read`を選択する（scope ID: `account-analytics.read`）。
 5. `Account Settings Read`を選択する（scope ID: `account-settings.read`）。アカウント一覧の取得に使用する。
+6. `offline_access`を要求する。期限切れaccess tokenをブラウザ操作なしで更新するためのrefresh token取得に使用する。
 
-R2、Workers、D1それぞれの製品別Read scopeは、GraphQL Analyticsの集計取得には不要だった。必要最小限の上記2権限だけを指定する。
+R2、Workers、D1それぞれの製品別Read scopeは、GraphQL Analyticsの集計取得には不要だった。Cloudflare API権限は必要最小限の上記2権限だけを指定する。
 
 public clientへの変更にはドメイン確認が必要で、公開後はprivateへ戻せないため、実装とscopeの検証が終わるまで公開しない。
 
@@ -29,10 +30,10 @@ npx wrangler secret put OAUTH_CLIENT_SECRET
 npx wrangler secret put SESSION_ENCRYPTION_SECRET
 ```
 
-`OAUTH_SCOPES`と`OAUTH_REDIRECT_URI`は公開値なので通常のWorker変数へ設定する。現在のscopeは次の2つ。
+`OAUTH_SCOPES`と`OAUTH_REDIRECT_URI`は公開値なので通常のWorker変数へ設定する。現在のscopeはCloudflare APIの2権限とtoken更新用の`offline_access`。
 
 ```text
-account-analytics.read account-settings.read
+account-analytics.read account-settings.read offline_access
 ```
 
 Dashboardでsecretを管理したままCLIから更新するときは、既存secretを消さないよう`npx wrangler deploy --keep-vars`を使う。
@@ -57,4 +58,5 @@ GraphQL Analyticsは集計遅延、保持期間、adaptive samplingの影響を�
 - `account-analytics.read`でR2、Workers、D1の3クエリが成功した。
 - WorkersのCPU quantileはGraphQLのマイクロ秒から料金計算用のミリ秒へ変換する。
 - R2未使用アカウントは警告ではなく0として表示できた。
-- 期限情報がないaccess tokenでも、GraphQLがHTTP 401を返した場合はrefresh tokenで1回だけ更新して全datasetを再取得する。HTTP 429はrefreshせず、時間を置いた再取得を案内する。
+- 期限情報がないaccess tokenでも、GraphQLがHTTP 401を返した場合はrefresh tokenで1回だけ更新して全datasetを再取得する。refresh tokenを確実に要求するため`offline_access`も指定する。HTTP 429はrefreshせず、時間を置いた再取得を案内する。
+- token更新または更新後のAnalytics認証が拒否された場合は、機密値をログへ出さず理由codeだけを記録し、画面で再接続を案内する。

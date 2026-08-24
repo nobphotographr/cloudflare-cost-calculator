@@ -126,6 +126,13 @@ function setConnectionState(connected) {
   button.textContent = connected ? "接続済み" : "Cloudflareに接続";
 }
 
+function showReconnectRequired(error) {
+  if (error?.code !== "reconnect_required") return false;
+  setConnectionState(false);
+  document.querySelector("#reconnectNotice").hidden = false;
+  return true;
+}
+
 function renderResourceList(id, rows, describe) {
   const list = document.querySelector(`#${id}`);
   list.replaceChildren();
@@ -243,6 +250,7 @@ function resourceCostRows(snapshot) {
 
 function showConnectedSnapshot(snapshot, accountName = "デモアカウント") {
   document.querySelector("#disconnectNotice").hidden = true;
+  document.querySelector("#reconnectNotice").hidden = true;
   snapshotMode = snapshot.source;
   const projected = projectedSnapshot(snapshot);
   plan.value = "paid";
@@ -386,7 +394,8 @@ async function loadSession() {
       return;
     }
     await loadUsage();
-  } catch {
+  } catch (error) {
+    showReconnectRequired(error);
     // A static preview has no API. Manual estimation remains fully available.
   }
 }
@@ -442,13 +451,13 @@ document.querySelector("#demoButton").addEventListener("click", async () => {
   document.querySelector("#connectionPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 document.querySelector("#refreshUsage").addEventListener("click", async () => {
-  try { await loadUsage(); } catch { /* Keep the last successful snapshot visible. */ }
+  try { await loadUsage(); } catch (error) { showReconnectRequired(error); }
 });
 document.querySelector("#accountSelect").addEventListener("change", async (event) => {
   try {
     await fetchJson("/api/session/account", { method: "POST", body: JSON.stringify({ accountId: event.target.value }) });
     await loadUsage();
-  } catch { /* Keep account selector available for retry. */ }
+  } catch (error) { showReconnectRequired(error); }
 });
 document.querySelector("#saveBudget").addEventListener("click", async () => {
   const amount = value("budgetUsd");

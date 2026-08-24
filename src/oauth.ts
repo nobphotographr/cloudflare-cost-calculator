@@ -122,7 +122,11 @@ export async function refreshToken(input: {
 }
 
 export async function revokeToken(input: {
-  clientId: string; clientSecret: string; token: string; fetcher?: typeof fetch;
+  clientId: string;
+  clientSecret: string;
+  token: string;
+  tokenTypeHint: "access_token" | "refresh_token";
+  fetcher?: typeof fetch;
 }): Promise<void> {
   const requestInit: RequestInit = {
     method: "POST",
@@ -130,12 +134,35 @@ export async function revokeToken(input: {
       authorization: basicAuthorization(input.clientId, input.clientSecret),
       "content-type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ token: input.token, token_type_hint: "refresh_token" }),
+    body: new URLSearchParams({ token: input.token, token_type_hint: input.tokenTypeHint }),
   };
   const response = input.fetcher
     ? await input.fetcher(OAUTH_ENDPOINTS.revoke, requestInit)
     : await fetch(OAUTH_ENDPOINTS.revoke, requestInit);
   if (!response.ok) throw new Error(`OAuth token revocation failed: HTTP ${response.status}`);
+}
+
+export async function revokeTokenSet(input: {
+  clientId: string;
+  clientSecret: string;
+  accessToken: string;
+  refreshToken?: string;
+  fetcher?: typeof fetch;
+}): Promise<boolean> {
+  const tokens: Array<{ token: string; tokenTypeHint: "access_token" | "refresh_token" }> = [];
+  if (input.refreshToken) tokens.push({ token: input.refreshToken, tokenTypeHint: "refresh_token" });
+  tokens.push({ token: input.accessToken, tokenTypeHint: "access_token" });
+
+  let accepted = true;
+  for (const item of tokens) {
+    try {
+      await revokeToken({ ...input, ...item });
+    } catch {
+      accepted = false;
+      // Try each token independently so one unsupported token type does not skip the other.
+    }
+  }
+  return accepted;
 }
 
 export async function stateHash(state: string): Promise<string> {

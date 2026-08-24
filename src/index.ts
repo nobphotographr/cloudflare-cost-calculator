@@ -1,6 +1,6 @@
 import { demoUsage, loadAccountUsage } from "./analytics";
 import { listAuthorizedAccounts } from "./cloudflare";
-import { createOAuthRequest, exchangeCode, refreshToken, revokeToken } from "./oauth";
+import { createOAuthRequest, exchangeCode, refreshToken, revokeTokenSet } from "./oauth";
 import { cleanupUsageHistory, deleteAccountData, getBudget, loadUsageHistory, saveUsageSnapshot, setBudget } from "./history";
 import { dispatchBudgetNotifications, getNotificationSettings, loadNotificationEvents, saveNotificationSettings } from "./notifications";
 import {
@@ -292,18 +292,24 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
 
   if (url.pathname === "/api/disconnect" && request.method === "POST") {
     const session = await connected(request, env);
+    let tokenRevocationAccepted = true;
     if (session) {
       try {
         const oauth = config(env);
-        const token = session.tokenSet.refreshToken ?? session.tokenSet.accessToken;
-        await revokeToken({ clientId: oauth.clientId, clientSecret: oauth.clientSecret, token });
+        tokenRevocationAccepted = await revokeTokenSet({
+          clientId: oauth.clientId,
+          clientSecret: oauth.clientSecret,
+          accessToken: session.tokenSet.accessToken,
+          refreshToken: session.tokenSet.refreshToken,
+        });
       } catch {
+        tokenRevocationAccepted = false;
         // Local session removal must still complete when Cloudflare is unavailable.
       }
       await deleteAccountData(env.SESSIONS, session.accounts.map((account) => account.id));
       await deleteSession(env.SESSIONS, session.sessionHash);
     }
-    return json({ disconnected: true }, 200, { "set-cookie": clearCookie(url) });
+    return json({ disconnected: true, tokenRevocationAccepted }, 200, { "set-cookie": clearCookie(url) });
   }
 
   return json({ error: "not_found" }, 404);

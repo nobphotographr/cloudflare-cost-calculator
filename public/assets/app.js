@@ -238,6 +238,7 @@ function resourceCostRows(snapshot) {
 }
 
 function showConnectedSnapshot(snapshot, accountName = "デモアカウント") {
+  document.querySelector("#disconnectNotice").hidden = true;
   snapshotMode = snapshot.source;
   const projected = projectedSnapshot(snapshot);
   plan.value = "paid";
@@ -480,7 +481,12 @@ document.querySelector("#saveNotification").addEventListener("click", async () =
   }
 });
 document.querySelector("#disconnectButton").addEventListener("click", async () => {
-  try { await fetchJson("/api/disconnect", { method: "POST" }); } catch { /* Hide local state even if revoke is unavailable. */ }
+  let tokenRevocationAccepted = false;
+  try {
+    const result = await fetchJson("/api/disconnect", { method: "POST" });
+    tokenRevocationAccepted = result.tokenRevocationAccepted !== false;
+  } catch { /* Hide local state even if revoke is unavailable. */ }
+  document.querySelector("#disconnectNotice").hidden = tokenRevocationAccepted;
   document.querySelector("#connectionPanel").hidden = true;
   setConnectionState(false);
   snapshotMode = "manual";

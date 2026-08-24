@@ -31,12 +31,14 @@ Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` �
 - Cloud Cost: `npx wrangler deploy --keep-vars --dry-run` は成功。未適用D1 migrationは `0003_budget_notifications.sql` のみ。
 - Cloud Cost D1 Time Travel bookmark: `00000010-00000000-000050d1-d81a1102cb4807000e23b09c6c2a579c`
 - Handoff: 管理画面のアップロード前R2追加費用目安はGitHubへpush済み。Handoff本番は `0003` から `0018` のD1 migrationが未適用のため、migration適用と `--keep-vars` deployを分けて直前承認する。
-- 本番データ削除、OAuth revoke、D1 restoreは未実行。
+- 2026-08-24に承認を得てCloud Costの接続解除・手動revoke・再接続を実施した。アプリ側のセッション・設定削除は成功し、Connected Applicationsの認可は残った。token revocation endpointの成功・失敗を画面へ返さない従来実装だったため、token自体の失効成否はこの試行からは判別できない。Dashboardから手動解除した後、`account-analytics.read account-settings.read`の2権限で再認可し、Workers 595 requests、D1 676 readsを含むAnalytics再取得まで成功した。
+- 上記を受けて、refresh/access tokenを独立に失効し、どちらかの要求が失敗した場合はConnected Applicationsでの手動確認を案内する修正を追加した。本番反映・修正版での再切断確認は未実施。
+- D1 restoreは未実行。Handoffの本番データ削除・OAuth revokeも未実行。
 
 ## OAuth実機確認の残課題
 
 1. access token期限前のrefreshを実機で確認する。
-2. 接続解除時のrevokeとD1セッション削除を実機で確認する。
+2. 修正版を本番反映した後、接続解除でConnected Applicationsから認可が消えることを再確認する。ローカルセッション・設定削除は2026-08-24に確認済み。
 3. R2利用のあるアカウントで保存量・Class A/Bを請求値と照合する。
 4. Workers・D1の集計値をDashboard表示と最終照合する。
 

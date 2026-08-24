@@ -45,7 +45,7 @@ Dashboardでsecretを管理したままCLIから更新するときは、既存se
 2. 複数アカウントの場合に対象を選択できる。
 3. R2、Workers、D1のうち未使用製品があっても、他の取得結果を表示できる。
 4. R2日次ピーク、Class A/B、Workers requests、CPU P50/P99、D1 rows・容量をDashboardと照合する。
-5. token期限前のrefreshと、接続解除時のrevokeを確認する。
+5. token期限前のrefreshと、接続解除時のrevokeを確認する。接続解除後はCloudflare Dashboardの **My Profile → Access Management → Connected Applications** から対象アプリが消えていることも照合する。
 6. 接続解除後にD1のセッションが削除されることを確認する。
 
 GraphQL Analyticsは保持期間とサンプリングの影響を受ける。画面上の金額は公式請求額ではなく、直近30日の集計値を公開料金へ当てはめた推定として扱う。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOAuthRequest, exchangeCode, refreshToken, revokeToken } from "../src/oauth";
+import { createOAuthRequest, exchangeCode, refreshToken, revokeTokenSet } from "../src/oauth";
 
 describe("Cloudflare OAuth", () => {
   it("PKCE付きの認可URLを作る", async () => {
@@ -58,10 +58,52 @@ describe("Cloudflare OAuth", () => {
     };
     const refreshed = await refreshToken({ clientId: "client", clientSecret: "secret", refreshToken: "old-refresh", fetcher });
     expect(refreshed.refreshToken).toBe("old-refresh");
-    await revokeToken({ clientId: "client", clientSecret: "secret", token: "old-refresh", fetcher });
+    const revoked = await revokeTokenSet({
+      clientId: "client",
+      clientSecret: "secret",
+      accessToken: "new-access",
+      refreshToken: "old-refresh",
+      fetcher,
+    });
+    expect(revoked).toBe(true);
     expect(requests).toEqual([
       { url: "https://dash.cloudflare.com/oauth2/token", body: "grant_type=refresh_token&refresh_token=old-refresh" },
       { url: "https://dash.cloudflare.com/oauth2/revoke", body: "token=old-refresh&token_type_hint=refresh_token" },
+      { url: "https://dash.cloudflare.com/oauth2/revoke", body: "token=new-access&token_type_hint=access_token" },
     ]);
+  });
+
+  it("一方のtoken失効が失敗しても他方を試す", async () => {
+    const requests: string[] = [];
+    const fetcher: typeof fetch = async (_request, init) => {
+      const body = String(init?.body);
+      requests.push(body);
+      return new Response(null, { status: body.includes("refresh_token") ? 400 : 200 });
+    };
+
+    const revoked = await revokeTokenSet({
+      clientId: "client",
+      clientSecret: "secret",
+      accessToken: "access",
+      refreshToken: "refresh",
+      fetcher,
+    });
+
+    expect(revoked).toBe(false);
+    expect(requests).toEqual([
+      "token=refresh&token_type_hint=refresh_token",
+      "token=access&token_type_hint=access_token",
+    ]);
+  });
+
+  it("どちらのtoken失効も拒否された場合は失敗を返す", async () => {
+    const fetcher: typeof fetch = async () => new Response(null, { status: 503 });
+    await expect(revokeTokenSet({
+      clientId: "client",
+      clientSecret: "secret",
+      accessToken: "access",
+      refreshToken: "refresh",
+      fetcher,
+    })).resolves.toBe(false);
   });
 });

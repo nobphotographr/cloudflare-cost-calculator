@@ -11,8 +11,8 @@
 | 5 | CC-005 | 料金更新運用 | P1 | 完了 | 料金ソース、確認日、差分確認手順を定義し、古い料金であることを検知できる。 |
 | 6 | CC-006 | Cloudflare OAuth client | P0 | 一部完了 | Authorization Code Flow + PKCE、2権限での実アカウント接続、Analytics取得を確認済み。refresh/access tokenの独立revokeと失敗時案内を本番反映し、切断後に再consentが必要になることからtoken失効とローカルセッション削除を実機確認した。Connected Applicationsの一覧行はtoken revoke後も残り、Dashboardのgrant削除とは別動作。token期限前refreshの実機確認を残す。 |
 | 7 | CC-007 | Analytics読取scopeの実機検証 | P0 | 完了 | `account-analytics.read`でR2・Workers・D1を取得し、`account-settings.read`でアカウント一覧を取得できる。製品別scopeは不要。 |
-| 8 | CC-008 | R2実績連携 | P0 | 一部完了 | 実アカウントでクエリ成功と未使用時の0表示を確認済み。R2利用があるアカウントで保存量・Class A/Bを請求値と照合する。 |
-| 9 | CC-009 | Workers・D1実績連携 | P1 | 一部完了 | 実アカウントのWorkersリクエスト・CPU、D1行数・容量の取得と試算反映を確認済み。Dashboard表示との最終照合を行う。 |
+| 8 | CC-008 | R2実績連携 | P0 | 一部完了 | 空bucketの保存量0 BはDashboardと一致。月初集計のClass A 20回・Class B 10回に対し、Dashboard請求期間はClass A 14回・Class B 21回だった。期間境界とcontrol-plane操作を含む指標差を切り分ける。 |
+| 9 | CC-009 | Workers・D1実績連携 | P1 | 一部完了 | D1の3 database ID対応を確認。Cloud Cost DBはアプリ182 reads対Dashboard 179 readsでほぼ一致したが、Handoff DBは215対198、Installer DBは338対222。Workersの月初・30日Dashboard表示は取得エラーのため、集計遅延を待って再照合する。 |
 | 10 | CC-010 | 集計値の保存方針 | P0 | 完了 | token暗号化、30日セッション、400日の日次合計、明示的な接続解除時の履歴削除を実装する。リソース名は長期保存しない。 |
 | 11 | CC-011 | 月末予測 | P1 | 完了 | 今月の経過日数で操作量を補正し、Workers CPUはP50–P99の月末レンジを表示する。 |
 | 12 | CC-012 | 予算通知 | P2 | 一部完了 | 月額予算と50%、80%、100%の画面内アラートを実装済み。メール等の外部通知を別課題とする。 |

@@ -38,7 +38,7 @@ Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` �
 ## OAuth実機確認の残課題
 
 1. access token期限前のrefreshを実機で確認する。
-2. R2利用のあるアカウントで保存量・Class A/Bを請求値と照合する。
-3. Workers・D1の集計値をDashboard表示と最終照合する。
+2. R2は空bucketの保存量0 Bが一致した。Cloud Costの月初集計はClass A 20回・Class B 10回、Dashboardの請求期間表示はClass A 14回・Class B 21回のため、期間境界とcontrol-plane操作を含む指標差を切り分ける。
+3. D1は3 database IDの対応を確認した。Cloud Cost自身のDBはアプリ182 reads、Dashboard直前値179 readsで集計遅延の範囲だったが、Handoff DBは215対198、Installer DBは338対222だった。Workersの月初・30日Dashboard表示はCloudflare側の取得エラーになったため、時間を置いて再照合する。
 
 client secretや暗号化secretの値はリポジトリ、課題表、ログへ保存しない。

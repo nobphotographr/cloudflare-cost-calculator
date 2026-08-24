@@ -164,7 +164,8 @@ export function aggregateWorkers(account: Record<string, unknown>): UsageSnapsho
     const name = typeof dimensions.scriptName === "string" ? dimensions.scriptName : "(unknown)";
     const requests = numeric(object(row.sum).requests);
     // workersInvocationsAdaptive の cpuTime quantile はマイクロ秒。
-    // 料金計算と画面入力はミリ秒なので、ここで単位を揃える。
+    // GraphQLはscriptNameだけで期間全体を集計し、時間bucketのquantileを
+    // 平均する誤差を避ける。料金計算と画面入力はミリ秒なので単位も揃える。
     const p50 = numeric(object(row.quantiles).cpuTimeP50) / 1_000;
     const p99 = numeric(object(row.quantiles).cpuTimeP99) / 1_000;
     const current = scripts.get(name) ?? { requests: 0, weightedP50: 0, weightedP99: 0 };
@@ -234,7 +235,7 @@ const R2_QUERY = `query CostR2($accountTag: string!, $start: Time, $end: Time) {
 const WORKERS_QUERY = `query CostWorkers($accountTag: string!, $start: string, $end: string) {
   viewer { accounts(filter: { accountTag: $accountTag }) {
     workersInvocationsAdaptive(limit: 10000, filter: { datetime_geq: $start, datetime_leq: $end }) {
-      sum { requests } quantiles { cpuTimeP50 cpuTimeP99 } dimensions { scriptName datetime }
+      sum { requests } quantiles { cpuTimeP50 cpuTimeP99 } dimensions { scriptName }
     }
   } }
 }`;

@@ -11,10 +11,12 @@ describe("Cloudflare Analytics集計", () => {
 
   it("各GraphQL datasetへ同じUTC月初と終了時刻を渡す", async () => {
     const requests = new Map<string, Record<string, string>>();
+    const queries = new Map<string, string>();
     const fetcher: typeof fetch = async (_input, init) => {
       const payload = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, string> };
       const operation = payload.query.match(/query (\w+)/)?.[1] ?? "unknown";
       requests.set(operation, payload.variables);
+      queries.set(operation, payload.query);
       const account = operation === "CostR2"
         ? { r2OperationsAdaptiveGroups: [], r2StorageAdaptiveGroups: [] }
         : operation === "CostWorkers"
@@ -40,6 +42,8 @@ describe("Cloudflare Analytics集計", () => {
     };
     expect(requests.get("CostR2")).toEqual(exactWindow);
     expect(requests.get("CostWorkers")).toEqual(exactWindow);
+    expect(queries.get("CostWorkers")).toContain("dimensions { scriptName }");
+    expect(queries.get("CostWorkers")).not.toContain("scriptName datetime");
     expect(requests.get("CostD1")).toEqual({
       accountTag: "0".repeat(32),
       start: "2026-08-01",

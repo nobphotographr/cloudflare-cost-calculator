@@ -37,12 +37,15 @@ Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` �
 - その後の既存接続でWorkers・D1がHTTP 401、R2が429を返す状態を実機観測した。token応答に期限がない場合は自動refreshを行わず、401も製品別の0件表示に変換していたことが原因。401を認証失敗として上位へ返し、refresh tokenで1回だけ更新して全datasetを再取得する修正を追加した。429は権限エラーと分け、時間を置いた再取得を案内する。
 - Version `a43d0258-6797-4056-9c8f-6bacb0ac05c9`へ上記修正を反映した後、既存接続でR2・Workers・D1すべてのHTTP 401を再現し、自動復帰しないことを確認した。Cloudflareの公開OIDC設定は`refresh_token` grantと`offline_access` scopeを案内しているため、OAuth要求へ`offline_access`を追加した。token値を出さずrefresh token・期限の有無だけを記録し、更新拒否時は理由codeと再接続案内を返す。
 - Version `59958d74-3d4f-46b9-8c78-98f25c128c84`へ反映後、OAuth clientのGrant typeへ`Refresh Token`を追加した。当初はclient側が未対応だったため`invalid_scope`を返したが、設定後の再認可ではcallback scopeに`offline_access`が含まれ、非機密metadataログでrefresh tokenと期限の両方を確認した。接続直後と手動再取得はいずれも成功し、R2 0、Workers 785→793 requests、D1 3,018 readsを取得した。
+- 2026-08-24 07:12 UTCまでをR2 bucket MetricsのCustom期間・UTCで照合し、保存量0 B、Class A 20、Class B 10がアプリと一致した。R2請求概要は請求期間と課金用データ源が異なるため、Analytics比較には使用しない。
+- 07:23 UTCの再取得ではWorkers requestsが`cloudflare-cost-calculator` 376、`cloudflare-handoff` 263、`handoff-installer` 178となりDashboardと一致した。Workers Metricsは7日超のCustom期間でNo dataだったため、月初以降の全リクエストを含むLast 7 daysで照合した。
+- 同じ再取得でD1 readsがdatabase別に2502・261・348、writes合計459、storage合計364.544 kBとなり、DashboardのCustom期間表示（reads 2.5k・261・348、writes 266・123・70、storage 213 kB・77.82 kB・73.73 kB）と表示丸め内で一致した。
+- Workers CPUはGraphQLを`scriptName + datetime`で分割していたため、時間bucket別P50/P99の加重平均がDashboardの期間全体quantileと一致しなかった。`scriptName`だけで期間集計するローカル修正と回帰テストを追加し、本番反映後の再照合を待つ。
 - D1 restoreは未実行。Handoffの本番データ削除・OAuth revokeも未実行。
 
 ## OAuth実機確認の残課題
 
 1. refresh token発行までは確認済み。access token期限切れ後、再認可なしでAnalytics取得へ復帰することを確認する。
-2. R2は空bucketの保存量0 Bが一致した。旧比較はアプリのUTC月初集計に対してDashboardの請求期間表示を使っており、画面側も誤って「直近30日」と案内していた。同じUTC開始・終了時刻を表示する修正後にClass A/Bを再照合する。
-3. D1は3 database IDの対応を確認した。旧比較はアプリのUTC月初集計とDashboardの30日表示で期間が一致していなかったため参考値とし、同一UTC期間で再照合する。WorkersのDashboard表示はCloudflare側の取得エラーが解消した後に同じ期間で確認する。
+2. Workers CPUの期間集計修正を本番反映し、3サービスのP50/P99をDashboardと再照合する。
 
 client secretや暗号化secretの値はリポジトリ、課題表、ログへ保存しない。

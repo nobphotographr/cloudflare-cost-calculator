@@ -52,6 +52,8 @@ Dashboardでsecretを管理したままCLIから更新するときは、既存se
 
 GraphQL Analyticsは集計遅延、保持期間、adaptive samplingの影響を受ける。画面上の金額は公式請求額ではなく、UTC月初から現在までの集計値を公開料金へ当てはめ、同じ利用ペースが続く前提で月末へ補正した推定として扱う。
 
+R2は請求概要ではなく対象bucketの **Metrics** でCustom期間とUTCを指定する。Workers Metricsが7日超のCustom期間でNo dataになる場合は、月初以降の全リクエストが含まれる範囲に限りLast 7 daysで照合する。CPU quantileはGraphQLも`scriptName`だけで期間集計し、時間bucket別quantileを平均しない。
+
 ## 4. 2026-08-24 実機確認結果
 
 - private OAuth clientからAuthorization Code Flow + PKCEで接続できた。
@@ -62,3 +64,5 @@ GraphQL Analyticsは集計遅延、保持期間、adaptive samplingの影響を�
 - 期限情報がないaccess tokenでも、GraphQLがHTTP 401を返した場合はrefresh tokenで1回だけ更新して全datasetを再取得する。refresh tokenを確実に要求するため`offline_access`も指定する。HTTP 429はrefreshせず、時間を置いた再取得を案内する。
 - token更新または更新後のAnalytics認証が拒否された場合は、機密値をログへ出さず理由codeだけを記録し、画面で再接続を案内する。
 - OAuth clientのGrant typeへ`Refresh Token`を追加後、再認可callbackで`account-analytics.read account-settings.read offline_access`を受け取り、refresh tokenとaccess token期限の両方が発行された。接続直後と手動再取得でR2 0、Workers 785→793 requests、D1 3,018 readsを取得した。
+- R2 bucket Metricsを2026-08-01 00:00〜08-24 07:12 UTCへ合わせ、保存量0 B、Class A 20、Class B 10が一致した。
+- 07:23 UTCの再取得でWorkers requests 376・263・178、D1 reads 2502・261・348、writes合計459、storage合計364.544 kBがDashboardと表示丸め内で一致した。

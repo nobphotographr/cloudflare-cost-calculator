@@ -273,6 +273,7 @@ function showConnectedSnapshot(snapshot, accountName = "デモアカウント") 
   });
   document.querySelector("#connectionPanel").hidden = false;
   document.querySelector("#disconnectButton").hidden = snapshot.source === "demo";
+  document.querySelector("#notificationControl").hidden = snapshot.source !== "cloudflare";
   setConnectionState(snapshot.source === "cloudflare");
   render();
   const center = estimateAll(readInput());
@@ -302,6 +303,7 @@ async function loadUsage() {
   showConnectedSnapshot(snapshot, accountName);
   await loadBudget();
   await loadHistory();
+  await loadNotifications();
 }
 
 async function loadBudget() {
@@ -326,6 +328,36 @@ async function loadHistory() {
   } catch { /* History is optional during the first connection. */ }
 }
 
+function renderNotificationHistory(events) {
+  const history = document.querySelector("#notificationHistory");
+  const latest = Array.isArray(events) ? events[0] : null;
+  if (!latest) {
+    history.textContent = "通知履歴なし";
+    return;
+  }
+  const label = latest.status === "sent" ? "送信済み" : "再送待ち";
+  history.textContent = `${label}: ${latest.monthKey} / ${Math.round(latest.thresholdRatio * 100)}% / ${money(latest.estimateUsd)}`;
+}
+
+async function loadNotifications() {
+  if (snapshotMode !== "cloudflare") return;
+  try {
+    const [settingsResult, historyResult] = await Promise.all([
+      fetchJson("/api/notifications/webhook"),
+      fetchJson("/api/notifications/history?limit=5"),
+    ]);
+    const settings = settingsResult.settings ?? {};
+    document.querySelector("#notificationEnabled").checked = Boolean(settings.enabled);
+    document.querySelector("#notificationWebhook").placeholder = settings.webhookDisplay || "https://hooks.example.com/...";
+    document.querySelector("#notificationStatus").textContent = settings.webhookConfigured
+      ? `設定済み: ${settings.webhookDisplay}`
+      : "";
+    renderNotificationHistory(historyResult.events ?? []);
+  } catch {
+    document.querySelector("#notificationStatus").textContent = "通知設定を読み込めませんでした";
+  }
+}
+
 async function loadSession() {
   try {
     const session = await fetchJson("/api/session");
@@ -343,6 +375,7 @@ async function loadSession() {
     if (!session.selectedAccount && session.accounts.length > 1) {
       setConnectionState(true);
       document.querySelector("#connectionPanel").hidden = false;
+      document.querySelector("#notificationControl").hidden = true;
       document.querySelector("#connectionTitle").textContent = "対象アカウントを選択してください";
       document.querySelector("#connectionPeriod").textContent = "接続済み";
       return;
@@ -429,6 +462,21 @@ document.querySelector("#saveBudget").addEventListener("click", async () => {
     render();
   } catch {
     status.textContent = "保存できませんでした";
+  }
+});
+document.querySelector("#saveNotification").addEventListener("click", async () => {
+  const enabled = document.querySelector("#notificationEnabled").checked;
+  const webhookUrl = document.querySelector("#notificationWebhook").value;
+  const status = document.querySelector("#notificationStatus");
+  status.textContent = enabled ? "検証中…" : "保存中…";
+  try {
+    const result = await fetchJson("/api/notifications/webhook", { method: "POST", body: JSON.stringify({ enabled, webhookUrl }) });
+    const settings = result.settings ?? {};
+    document.querySelector("#notificationWebhook").value = "";
+    document.querySelector("#notificationWebhook").placeholder = settings.webhookDisplay || "https://hooks.example.com/...";
+    status.textContent = settings.enabled ? `保存しました: ${settings.webhookDisplay}` : "通知を無効化しました";
+  } catch (error) {
+    status.textContent = error.message || "通知設定を保存できませんでした";
   }
 });
 document.querySelector("#disconnectButton").addEventListener("click", async () => {

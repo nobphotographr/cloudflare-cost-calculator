@@ -120,6 +120,8 @@ export async function deleteAccountData(db: D1Database, accountIds: string[]): P
     await db.batch([
       db.prepare("DELETE FROM usage_snapshots WHERE account_hash = ?1").bind(hash),
       db.prepare("DELETE FROM budget_settings WHERE account_hash = ?1").bind(hash),
+      db.prepare("DELETE FROM notification_settings WHERE account_hash = ?1").bind(hash),
+      db.prepare("DELETE FROM budget_notification_events WHERE account_hash = ?1").bind(hash),
     ]);
   }
 }

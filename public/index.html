@@ -71,6 +71,13 @@
         <button type="button" id="saveBudget">予算を保存</button>
         <span class="budget-save-status" id="budgetSaveStatus" aria-live="polite"></span>
       </div>
+      <div class="notification-control" id="notificationControl">
+        <label class="notification-toggle"><input id="notificationEnabled" type="checkbox"> Webhook通知</label>
+        <input id="notificationWebhook" type="url" inputmode="url" placeholder="https://hooks.example.com/...">
+        <button type="button" id="saveNotification">検証して保存</button>
+        <span class="notification-status" id="notificationStatus" aria-live="polite"></span>
+        <small id="notificationHistory">通知履歴なし</small>
+      </div>
       <div class="history-summary">
         <span>前月比較</span>
         <strong id="historyDelta">履歴を蓄積中</strong>

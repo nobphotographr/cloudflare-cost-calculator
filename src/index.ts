@@ -2,6 +2,7 @@ import { demoUsage, loadAccountUsage } from "./analytics";
 import { listAuthorizedAccounts } from "./cloudflare";
 import { createOAuthRequest, exchangeCode, refreshToken, revokeToken } from "./oauth";
 import { cleanupUsageHistory, deleteAccountData, getBudget, loadUsageHistory, saveUsageSnapshot, setBudget } from "./history";
+import { dispatchBudgetNotifications, getNotificationSettings, loadNotificationEvents, saveNotificationSettings } from "./notifications";
 import {
   cleanupSessions,
   connectSession,
@@ -214,6 +215,17 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
     try {
       const snapshot = await loadAccountUsage({ accessToken: session.tokenSet.accessToken, accountId: session.selectedAccount.id });
       await saveUsageSnapshot(env.SESSIONS, session.selectedAccount.id, snapshot);
+      ctx.waitUntil(dispatchBudgetNotifications({
+        db: env.SESSIONS,
+        accountId: session.selectedAccount.id,
+        accountName: session.selectedAccount.name,
+        snapshot,
+        encryptionSecret: config(env).encryptionSecret,
+      }).catch((error) => {
+        console.error("budget_notification_failed", {
+          message: error instanceof Error ? error.message : "unknown_error",
+        });
+      }));
       return json(snapshot);
     } catch {
       return json({ error: "analytics_failed" }, 502);
@@ -241,6 +253,41 @@ async function handleApi(request: Request, env: Env, ctx: ExecutionContext): Pro
     } catch {
       return json({ error: "invalid_budget" }, 400);
     }
+  }
+
+  if (url.pathname === "/api/notifications/webhook" && request.method === "GET") {
+    const session = await connected(request, env);
+    if (!session?.selectedAccount) return json({ error: "not_connected" }, 401);
+    const encryptionSecret = env.SESSION_ENCRYPTION_SECRET;
+    if (!encryptionSecret) return json({ error: "not_configured" }, 503);
+    return json({ settings: await getNotificationSettings(env.SESSIONS, session.selectedAccount.id, encryptionSecret) });
+  }
+
+  if (url.pathname === "/api/notifications/webhook" && request.method === "POST") {
+    const session = await connected(request, env);
+    if (!session?.selectedAccount) return json({ error: "not_connected" }, 401);
+    const encryptionSecret = env.SESSION_ENCRYPTION_SECRET;
+    if (!encryptionSecret) return json({ error: "not_configured" }, 503);
+    const body = await request.json() as Record<string, unknown>;
+    try {
+      return json({
+        settings: await saveNotificationSettings({
+          db: env.SESSIONS,
+          accountId: session.selectedAccount.id,
+          webhookUrl: body.webhookUrl,
+          enabled: body.enabled === true,
+          encryptionSecret,
+        }),
+      });
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : "notification_settings_failed" }, 400);
+    }
+  }
+
+  if (url.pathname === "/api/notifications/history" && request.method === "GET") {
+    const session = await connected(request, env);
+    if (!session?.selectedAccount) return json({ error: "not_connected" }, 401);
+    return json({ events: await loadNotificationEvents(env.SESSIONS, session.selectedAccount.id, Number(url.searchParams.get("limit") ?? 20)) });
   }
 
   if (url.pathname === "/api/disconnect" && request.method === "POST") {

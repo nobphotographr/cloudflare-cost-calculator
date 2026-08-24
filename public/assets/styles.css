@@ -84,6 +84,15 @@ h1 { margin: 0; font-size: clamp(42px, 5.1vw, 70px); line-height: 1.03; letter-s
 .budget-input input { width: 82px; height: 100%; padding: 0 8px 0 3px; border: 0; outline: 0; font-variant-numeric: tabular-nums; }
 .budget-control button { height: 30px; padding: 0 10px; border: 1px solid #cbd2df; border-radius: 4px; background: white; color: #4f576d; font-size: 10px; }
 .budget-save-status { color: var(--blue); }
+.notification-control { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(220px, 1fr) auto auto; gap: 8px; align-items: center; padding-top: 10px; border-top: 1px solid var(--soft-line); color: var(--muted); font-size: 10px; }
+.notification-control[hidden] { display: none; }
+.notification-toggle { display: inline-flex; align-items: center; gap: 6px; color: #4f576d; font-weight: 650; white-space: nowrap; }
+.notification-toggle input { width: 14px; height: 14px; accent-color: var(--blue); }
+.notification-control input[type="url"] { min-width: 0; height: 30px; padding: 0 9px; border: 1px solid #ccd3e1; border-radius: 4px; background: white; color: var(--ink); outline: 0; }
+.notification-control input[type="url"]:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.notification-control button { height: 30px; padding: 0 10px; border: 1px solid #cbd2df; border-radius: 4px; background: white; color: #4f576d; font-size: 10px; }
+.notification-status { color: var(--blue); }
+.notification-control small { grid-column: 2 / -1; color: var(--muted); font-size: 9px; }
 .history-summary { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 9px; padding-top: 10px; border-top: 1px solid var(--soft-line); color: var(--muted); font-size: 9px; }
 .history-summary strong { color: var(--ink); font-size: 11px; }
 .history-summary small { color: var(--muted); font-size: 9px; }
@@ -204,6 +213,8 @@ footer { min-height: 76px; display: flex; align-items: center; justify-content: 
   .connection-breakdown { grid-column: auto; }
   .resource-columns { grid-template-columns: 1fr; }
   .budget-control { grid-column: auto; flex-wrap: wrap; }
+  .notification-control { grid-column: auto; grid-template-columns: 1fr; }
+  .notification-control small { grid-column: auto; }
   .history-summary { grid-column: auto; flex-wrap: wrap; }
   .connection-limitations { grid-column: auto; }
   .controls, .results { padding: 23px 18px; }

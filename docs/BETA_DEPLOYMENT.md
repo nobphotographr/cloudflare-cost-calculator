@@ -30,7 +30,7 @@ Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` �
 
 - Cloud Cost: 2026-08-24に`0003_budget_notifications.sql`を本番D1へ適用し、`npx wrangler deploy --keep-vars`でVersion `8316842a-38ae-4141-a309-8361167f1dd0`を公開した。`/api/health`はHTTP 200、Webhook設定UIと履歴APIの初期表示も正常。
 - migration適用前のCloud Cost D1 Time Travel bookmark: `00000010-00000000-000050d1-d81a1102cb4807000e23b09c6c2a579c`
-- Handoff: 管理画面のアップロード前R2追加費用目安はGitHubへpush済み。Handoff本番は `0003` から `0018` のD1 migrationが未適用のため、migration適用と `--keep-vars` deployを分けて直前承認する。
+- Handoff: 2026-08-24にD1 migration `0003`から`0018`を適用し、管理画面のアップロード前R2追加費用目安を本番反映した。Version Metadata復旧後のVersionは`a1b42cc7-8cd8-44d7-9cb8-ca16e4472791`。
 - 2026-08-24に承認を得てCloud Costの接続解除・手動revoke・再接続を実施した。アプリ側のセッション・設定削除は成功し、Connected Applicationsの認可は残った。token revocation endpointの成功・失敗を画面へ返さない従来実装だったため、token自体の失効成否はこの試行からは判別できない。Dashboardから手動解除した後、`account-analytics.read account-settings.read`の2権限で再認可し、Workers 595 requests、D1 676 readsを含むAnalytics再取得まで成功した。
 - 上記を受けて、refresh/access tokenを独立に失効し、どちらかの要求が失敗した場合はConnected Applicationsでの手動確認を案内する修正を追加した。本番反映後の再切断では両revoke要求が成功し、ローカル接続状態が削除された。Connected Applicationsの一覧行は残るが、再接続時に2権限のconsentが再表示されたためtoken失効を確認できた。再認可後はWorkers 621 requests、D1 712 reads、R2 0を取得した。
 - D1 restoreは未実行。Handoffの本番データ削除・OAuth revokeも未実行。
@@ -38,7 +38,7 @@ Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` �
 ## OAuth実機確認の残課題
 
 1. access token期限前のrefreshを実機で確認する。
-2. R2は空bucketの保存量0 Bが一致した。Cloud Costの月初集計はClass A 20回・Class B 10回、Dashboardの請求期間表示はClass A 14回・Class B 21回のため、期間境界とcontrol-plane操作を含む指標差を切り分ける。
-3. D1は3 database IDの対応を確認した。Cloud Cost自身のDBはアプリ182 reads、Dashboard直前値179 readsで集計遅延の範囲だったが、Handoff DBは215対198、Installer DBは338対222だった。Workersの月初・30日Dashboard表示はCloudflare側の取得エラーになったため、時間を置いて再照合する。
+2. R2は空bucketの保存量0 Bが一致した。旧比較はアプリのUTC月初集計に対してDashboardの請求期間表示を使っており、画面側も誤って「直近30日」と案内していた。同じUTC開始・終了時刻を表示する修正後にClass A/Bを再照合する。
+3. D1は3 database IDの対応を確認した。旧比較はアプリのUTC月初集計とDashboardの30日表示で期間が一致していなかったため参考値とし、同一UTC期間で再照合する。WorkersのDashboard表示はCloudflare側の取得エラーが解消した後に同じ期間で確認する。
 
 client secretや暗号化secretの値はリポジトリ、課題表、ログへ保存しない。

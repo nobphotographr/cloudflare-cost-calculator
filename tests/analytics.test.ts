@@ -1,7 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { aggregateD1, aggregateR2, aggregateWorkers, demoUsage, loadAccountUsage } from "../src/analytics";
+import { aggregateD1, aggregateR2, aggregateWorkers, analyticsPeriodLabel, demoUsage, loadAccountUsage } from "../src/analytics";
 
 describe("Cloudflare Analytics集計", () => {
+  it("UTC月初から現在までの比較可能な期間を表示する", () => {
+    expect(analyticsPeriodLabel(
+      new Date("2026-08-01T00:00:00.000Z"),
+      new Date("2026-08-24T05:30:45.000Z"),
+    )).toBe("今月（UTC） 2026-08-01 00:00〜2026-08-24 05:30");
+  });
+
+  it("各GraphQL datasetへ同じUTC月初と終了時刻を渡す", async () => {
+    const requests = new Map<string, Record<string, string>>();
+    const fetcher: typeof fetch = async (_input, init) => {
+      const payload = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, string> };
+      const operation = payload.query.match(/query (\w+)/)?.[1] ?? "unknown";
+      requests.set(operation, payload.variables);
+      const account = operation === "CostR2"
+        ? { r2OperationsAdaptiveGroups: [], r2StorageAdaptiveGroups: [] }
+        : operation === "CostWorkers"
+          ? { workersInvocationsAdaptive: [] }
+          : { d1AnalyticsAdaptiveGroups: [], d1StorageAdaptiveGroups: [] };
+      return new Response(JSON.stringify({ data: { viewer: { accounts: [account] } } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    await loadAccountUsage({
+      accessToken: "token",
+      accountId: "0".repeat(32),
+      fetcher,
+      now: new Date("2026-08-24T05:30:45.000Z"),
+    });
+
+    const exactWindow = {
+      accountTag: "0".repeat(32),
+      start: "2026-08-01T00:00:00.000Z",
+      end: "2026-08-24T05:30:45.000Z",
+    };
+    expect(requests.get("CostR2")).toEqual(exactWindow);
+    expect(requests.get("CostWorkers")).toEqual(exactWindow);
+    expect(requests.get("CostD1")).toEqual({
+      accountTag: "0".repeat(32),
+      start: "2026-08-01",
+      end: "2026-08-24",
+    });
+  });
+
   it("R2の日次ピークと操作種別を料金入力へ変換する", () => {
     const result = aggregateR2({
       r2OperationsAdaptiveGroups: [
@@ -73,7 +118,7 @@ describe("Cloudflare Analytics集計", () => {
       now: new Date("2026-08-24T00:00:00Z"),
     });
     expect(result.source).toBe("cloudflare");
-    expect(result.period.label).toBe("今月 24日分");
+    expect(result.period.label).toBe("今月（UTC） 2026-08-01 00:00〜2026-08-24 00:00");
     expect(result.workers.requests).toBe(0);
     expect(result.limitations).toContain("Workersの集計を取得できませんでした。権限または利用状況を確認してください。");
     expect(result.limitations).not.toContain("R2の集計を取得できませんでした。権限または利用状況を確認してください。");

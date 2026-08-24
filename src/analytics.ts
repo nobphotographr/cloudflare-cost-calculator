@@ -94,6 +94,11 @@ function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
+export function analyticsPeriodLabel(start: Date, end: Date): string {
+  const compactUtc = (value: Date) => value.toISOString().slice(0, 16).replace("T", " ");
+  return `今月（UTC） ${compactUtc(start)}〜${compactUtc(end)}`;
+}
+
 export function aggregateR2(account: Record<string, unknown>): UsageSnapshot["r2"] {
   const operationsByBucket = new Map<string, { classA: number; classB: number }>();
   for (const rowValue of array(account.r2OperationsAdaptiveGroups)) {
@@ -268,13 +273,16 @@ export async function loadAccountUsage(input: {
       });
     }
   }
-  const limitations: string[] = ["Workers CPU料金はP50を中心値、P99を上限参考値として推定します。"];
+  const limitations: string[] = [
+    "Workers CPU料金はP50を中心値、P99を上限参考値として推定します。",
+    "Analyticsは集計遅延やadaptive samplingの影響を受けます。Dashboardと比較するときは同じUTC期間を指定してください。",
+  ];
   if (r2Result.status === "rejected") limitations.push("R2の集計を取得できませんでした。権限または利用状況を確認してください。");
   if (workersResult.status === "rejected") limitations.push("Workersの集計を取得できませんでした。権限または利用状況を確認してください。");
   if (d1Result.status === "rejected") limitations.push("D1の集計を取得できませんでした。権限または利用状況を確認してください。");
   return {
     source: "cloudflare",
-    period: { start: start.toISOString(), end: now.toISOString(), label: `今月 ${daysObserved}日分`, daysObserved, daysInMonth },
+    period: { start: start.toISOString(), end: now.toISOString(), label: analyticsPeriodLabel(start, now), daysObserved, daysInMonth },
     r2: r2Result.status === "fulfilled" ? aggregateR2(r2Result.value) : { storageGbMonth: 0, classA: 0, classB: 0, buckets: [] },
     workers: workersResult.status === "fulfilled" ? aggregateWorkers(workersResult.value) : { requests: 0, cpuTimeP50Ms: 0, cpuTimeP99Ms: 0, scripts: [] },
     d1: d1Result.status === "fulfilled" ? aggregateD1(d1Result.value) : { rowsRead: 0, rowsWritten: 0, storageGb: 0, databases: [] },
@@ -285,7 +293,7 @@ export async function loadAccountUsage(input: {
 export function demoUsage(): UsageSnapshot {
   return {
     source: "demo",
-    period: { start: "2026-08-01T00:00:00.000Z", end: "2026-08-24T00:00:00.000Z", label: "デモ / 今月24日分", daysObserved: 24, daysInMonth: 31 },
+    period: { start: "2026-08-01T00:00:00.000Z", end: "2026-08-24T00:00:00.000Z", label: "デモ / 今月（UTC） 2026-08-01 00:00〜2026-08-24 00:00", daysObserved: 24, daysInMonth: 31 },
     r2: {
       storageGbMonth: 362.6,
       classA: 63_800,

@@ -13,11 +13,15 @@ const presets = {
 
 const demoSnapshot = {
   source: "demo",
-  period: { start: "2026-08-01T00:00:00.000Z", end: "2026-08-24T00:00:00.000Z", label: "デモ / 今月24日分", daysObserved: 24, daysInMonth: 31 },
+  period: { start: "2026-08-01T00:00:00.000Z", end: "2026-08-24T00:00:00.000Z", label: "デモ / 今月（UTC） 2026-08-01 00:00〜2026-08-24 00:00", daysObserved: 24, daysInMonth: 31 },
   r2: { storageGbMonth: 362.6, classA: 63800, classB: 253000, buckets: [] },
   workers: { requests: 1440000, cpuTimeP50Ms: 5.8, cpuTimeP99Ms: 19.4, scripts: [] },
   d1: { rowsRead: 21987000, rowsWritten: 975000, storageGb: 1.8, databases: [] },
-  limitations: ["これは画面確認用の架空データです。", "Workers CPU料金はP50を中心値、P99を上限参考値として推定します。"]
+  limitations: [
+    "これは画面確認用の架空データです。",
+    "Workers CPU料金はP50を中心値、P99を上限参考値として推定します。",
+    "Analyticsは集計遅延やadaptive samplingの影響を受けます。Dashboardと比較するときは同じUTC期間を指定してください。",
+  ]
 };
 
 const demoHistory = [

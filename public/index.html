@@ -36,7 +36,7 @@
     <section class="connection-panel" id="connectionPanel" hidden aria-labelledby="connectionTitle">
       <div class="connection-main">
         <div class="connection-status"><span></span><strong id="connectionTitle">Cloudflareデータを読み込みました</strong></div>
-        <p id="connectionPeriod">直近30日</p>
+        <p id="connectionPeriod">UTC月初〜現在</p>
       </div>
       <label class="account-picker" id="accountPicker" hidden>
         <span>対象アカウント</span>
@@ -247,7 +247,7 @@
     <button class="dialog-close" type="button" id="closeDialog" aria-label="閉じる">×</button>
     <p class="eyebrow">ACCOUNT ANALYTICS</p>
     <h2>Cloudflare連携</h2>
-    <p>OAuthでAnalyticsの読み取りだけを許可し、R2・Workers・D1の集計値から直近30日の料金を表示します。</p>
+    <p>OAuthでAnalyticsの読み取りだけを許可し、R2・Workers・D1のUTC月初から現在までの集計値から月末料金を予測します。</p>
     <ul>
       <li>APIトークンの貼り付けは不要</li>
       <li>ファイル本体とファイル名は読み取らない</li>

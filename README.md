@@ -1,6 +1,6 @@
 # Cloud Cost
 
-Cloudflare R2、Workers、D1の公開価格から月額利用料を試算し、OAuth接続後は直近30日のAnalytics実績を自動反映するWebアプリです。
+Cloudflare R2、Workers、D1の公開価格から月額利用料を試算し、OAuth接続後はUTC月初から現在までのAnalytics実績を自動反映するWebアプリです。
 
 ## 現在の範囲
 

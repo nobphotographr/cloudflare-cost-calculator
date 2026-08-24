@@ -20,10 +20,18 @@
 - `account-analytics.read account-settings.read`によるR2・Workers・D1 Analytics取得
 - Workers、D1の実績値反映とR2未使用時の0表示
 - Windows引き継ぎ後のOAuth fetch修正を `npx wrangler deploy --keep-vars` で反映済み（Version ID: `733ac9fc-d825-44c0-ae6a-998b2bd41cd7`）
+- 外部予算Webhook通知の実装をGitHubへpush済み（commit `f8ca8c3`）。本番反映は `0003_budget_notifications.sql` 適用と `--keep-vars` deployの直前承認待ち。
 
 ## Windows側デプロイメモ
 
 Documents配下の `.wrangler/tmp` ではビルド出力が `Access is denied` になる場合がある。その場合は、許可済みの別ディレクトリを `--outdir` に指定してから `--keep-vars` 付きでデプロイする。
+
+## 現在の本番反映待ち
+
+- Cloud Cost: `npx wrangler deploy --keep-vars --dry-run` は成功。未適用D1 migrationは `0003_budget_notifications.sql` のみ。
+- Cloud Cost D1 Time Travel bookmark: `00000010-00000000-000050d1-d81a1102cb4807000e23b09c6c2a579c`
+- Handoff: 管理画面のアップロード前R2追加費用目安はGitHubへpush済み。Handoff本番は `0003` から `0018` のD1 migrationが未適用のため、migration適用と `--keep-vars` deployを分けて直前承認する。
+- 本番データ削除、OAuth revoke、D1 restoreは未実行。
 
 ## OAuth実機確認の残課題
 
